@@ -120,7 +120,43 @@ function isAppInstalled(): bool
     return filter_var(
         getEnvValue('APP_INSTALLED', (string) env('APP_INSTALLED', false)),
         FILTER_VALIDATE_BOOLEAN
+    ) || hasInstallLock();
+}
+
+function getInstallLockPath(): string
+{
+    return storage_path('app/install.lock');
+}
+
+function hasInstallLock(): bool
+{
+    return file_exists(getInstallLockPath());
+}
+
+function writeInstallLock(array $payload = []): bool
+{
+    $payload = array_merge([
+        'installed_at' => now()->toDateTimeString(),
+        'app_url' => config('app.url'),
+    ], $payload);
+
+    if (!is_dir(dirname(getInstallLockPath()))) {
+        mkdir(dirname(getInstallLockPath()), 0755, true);
+    }
+
+    return (bool) file_put_contents(
+        getInstallLockPath(),
+        json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
     );
+}
+
+function removeInstallLock(): bool
+{
+    if (!hasInstallLock()) {
+        return true;
+    }
+
+    return unlink(getInstallLockPath());
 }
 
 function backWithFlash($type, $message)

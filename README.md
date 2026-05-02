@@ -85,8 +85,9 @@ php artisan storage:link
 1. Buka `/install`
 2. Isi konfigurasi database
 3. Buat akun admin
-4. Login ke dashboard
-5. Segera ganti password admin
+4. Installer akan otomatis menjalankan migrasi database dan membuat install lock
+5. Login ke dashboard
+6. Segera ganti password admin
 
 ## Catatan Penting
 

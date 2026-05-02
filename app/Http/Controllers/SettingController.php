@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -179,21 +178,18 @@ class SettingController extends Controller
     public function install(Request $request)
     {
         if (isAppInstalled()) {
-            return redirect('/');
+            return redirect()->route('login');
         }
         if ($request->method() === 'POST') {
-
-                $request->validate([
-                    'database.host' => 'required|string',
-                    'database.username' => 'required|string',
-                    'database.password' => 'nullable|string',
-                    'database.database' => 'required|string',
-                    //'licensekey'           => 'required',
-                    //'buyeremail'           =>'required|email',
-                    'admin.username' => 'required',
-                    'admin.email' => 'required|email',
-                    'admin.password' => 'required|max:255',
-                ]);
+            $request->validate([
+                'database.host' => 'required|string',
+                'database.username' => 'required|string',
+                'database.password' => 'nullable|string',
+                'database.database' => 'required|string',
+                'admin.username' => 'required|string|max:255',
+                'admin.email' => 'required|email|max:255',
+                'admin.password' => 'required|string|min:8|max:255',
+            ]);
 
             /** CREATE DATABASE CONNECTION STARTS **/
             $db_params = $request->input('database');
@@ -214,61 +210,76 @@ class SettingController extends Controller
             }
             /** CREATE DATABASE CONNECTION ENDS **/
             try {
+                $urll = rtrim($request->root(), '/');
+                $env = [
+                    'DB_HOST' => $db_params['host'],
+                    'DB_DATABASE' => $db_params['database'],
+                    'DB_USERNAME' => $db_params['username'],
+                    'DB_PASSWORD' => $db_params['password'] ?? '',
+                    'APP_URL' => $urll,
+                    'APP_INSTALLED' => 'false',
+                ];
 
-                // delete old tables
-                DB::transaction(function () {
-                    DB::unprepared(
-                        File::get(base_path('database/db_tables.sql'))
-                    );
-                });
-                // cache clear artisan
-                Artisan::call('cache:clear');
-            } catch (\Throwable $th) {
-                Artisan::call('migrate:fresh', [
+                foreach ($env as $k => $v) {
+                    setEnv($k, $v);
+                }
+
+                if (!config('app.key') && !getEnvValue('APP_KEY')) {
+                    Artisan::call('key:generate', ['--force' => true]);
+                }
+
+                DB::purge('mysql');
+                DB::reconnect('mysql');
+
+                Artisan::call('migrate', [
                     '--force' => true,
                 ]);
-            }
-            /** SETTING .ENV VARS STARTS **/
-            $urll = rtrim($request->root(), '/');
-            $env['DB_HOST'] = $db_params['host'];
-            $env['DB_DATABASE'] = $db_params['database'];
-            $env['DB_USERNAME'] = $db_params['username'];
-            $env['DB_PASSWORD'] = $db_params['password'] ?? '';
-            $env['APP_URL'] = $urll;
-            $env['APP_INSTALLED'] = 'true';
-            if ($request->input('licensekey') != null) {
-                $env['LICENSE_KEY'] = $request->input('licensekey');
-            }
-            if ($request->input('buyeremail') != null) {
-                $env['BUYER_EMAIL'] = $request->input('buyeremail');
-            }
 
+                Artisan::call('cache:clear');
+                Artisan::call('view:clear');
+                Artisan::call('config:clear');
+                Artisan::call('route:clear');
+            } catch (\Throwable $th) {
+                Log::error('Installation failed', [
+                    'message' => $th->getMessage(),
+                ]);
 
-            foreach ($env as $k => &$v) {
-                setEnv($k, $v);
+                $validator = Validator::make([], [])
+                    ->errors()
+                    ->add('Installer', 'Automatic migration failed: ' . $th->getMessage());
+
+                return back()
+                    ->withErrors($validator)
+                    ->withInput();
             }
-
-            /** SETTING .ENV VARS ENDS **/
 
             /** CREATE ADMIN USER STARTS **/
-            if (
-                !($user = User::where(
-                    'email',
-                    $request->input('admin.email')
-                )->first())
-            ) {
-                $user = new User();
-                $user->username = $request->input('admin.username');
-                $user->email = $request->input('admin.email');
-                $user->password = Hash::make($request->input('admin.password'));
-                $user->email_verified_at = date('Y-m-d');
-                $user->level = 'admin';
-                $user->active_subscription = 'lifetime';
-                $user->limit_device = 10;
-                $user->chunk_blast = 0;
-                $user->save();
-            }
+            $user = User::firstOrNew([
+                'email' => $request->input('admin.email'),
+            ]);
+            $user->username = $request->input('admin.username');
+            $user->password = Hash::make($request->input('admin.password'));
+            $user->email_verified_at = now();
+            $user->level = 'admin';
+            $user->active_subscription = 'lifetime';
+            $user->limit_device = 10;
+            $user->chunk_blast = 0;
+            $user->save();
             /** CREATE ADMIN USER END **/
+
+            setEnv('APP_INSTALLED', 'true');
+            if (!getEnvValue('AUTH')) {
+                setEnv('AUTH', bin2hex(random_bytes(16)));
+            }
+            if (!getEnvValue('AI_INTERNAL_TOKEN')) {
+                setEnv('AI_INTERNAL_TOKEN', bin2hex(random_bytes(24)));
+            }
+
+            writeInstallLock([
+                'admin_email' => $user->email,
+                'database' => $db_params['database'],
+            ]);
+
             Auth::loginUsingId($user->id, true);
             return redirect()->route('home');
         }

@@ -225,7 +225,8 @@ Sesudah web Laravel siap:
    - atau path install sesuai folder project
 2. isi database bila diperlukan
 3. buat akun admin
-4. login
+4. submit installer, migrasi database akan berjalan otomatis dan install lock dibuat
+5. login
 
 ## 11. Cara Cek Apakah Web dan Node Sudah Benar
 
