@@ -182,6 +182,7 @@ class SettingController extends Controller
         }
         if ($request->method() === 'POST') {
             $request->validate([
+                'install_mode' => 'required|in:simple',
                 'database.host' => 'required|string',
                 'database.username' => 'required|string',
                 'database.password' => 'nullable|string',
@@ -276,6 +277,7 @@ class SettingController extends Controller
             }
 
             writeInstallLock([
+                'install_mode' => $request->input('install_mode'),
                 'admin_email' => $user->email,
                 'database' => $db_params['database'],
             ]);

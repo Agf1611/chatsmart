@@ -43,7 +43,8 @@ php artisan storage:link
 6. Pastikan permission `storage/` dan `bootstrap/cache/` bisa ditulis.
 7. Start aplikasi Node dengan startup file `server.js`.
 8. Buka `/install` lalu selesaikan wizard.
-9. Saat submit installer, aplikasi akan otomatis menjalankan migrasi database dan membuat install lock.
+9. Pilih `Mode Sederhana`, lalu isi database yang sudah dibuat di panel hosting.
+10. Saat submit installer, aplikasi akan otomatis menjalankan migrasi database dan membuat install lock.
 
 ## Rekomendasi cPanel / Shared Hosting
 

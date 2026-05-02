@@ -228,20 +228,27 @@
                     <div class="ui fluid card">
                         <div class="content header">
                             <div class="step" :class="{ active: stepIsActive(1) }">
+                                <i class="sliders horizontal big icon"></i>
+                                <div class="content">
+                                    <div class="description">{{ __('Installation mode') }}</div>
+                                </div>
+                            </div>
+
+                            <div class="step" :class="{ active: stepIsActive(2) }">
                                 <i class="cog big icon"></i>
                                 <div class="content">
                                     <div class="description">{{ __('Script requirements') }}</div>
                                 </div>
                             </div>
 
-                            <div class="step" :class="{ active: stepIsActive(2) }">
+                            <div class="step" :class="{ active: stepIsActive(3) }">
                                 <i class="database big icon"></i>
                                 <div class="content">
                                     <div class="description">{{ __('Database settings') }}</div>
                                 </div>
                             </div>
 
-                            <div class="step" :class="{ active: stepIsActive(3) }">
+                            <div class="step" :class="{ active: stepIsActive(4) }">
                                 <i class="user big icon"></i>
                                 <div class="content">
                                     <div class="description">{{ __('Admin account') }}</div>
@@ -250,7 +257,42 @@
                         </div>
 
                         <div class="content body">
-                            <div class="step requirements" :class="{ active: stepIsActive(1) }">
+                            <div class="step general" :class="{ active: stepIsActive(1) }">
+                                <input type="hidden" name="install_mode" value="simple">
+
+                                <div class="ui fluid green message">
+                                    <div class="header mb-1">Mode Sederhana</div>
+                                    <p class="mb-0">Gunakan mode ini jika database dan user database sudah dibuat di
+                                        panel hosting seperti cPanel atau aaPanel. Installer akan memakai data koneksi
+                                        yang kamu isi di langkah berikutnya, lalu otomatis menjalankan migrasi,
+                                        membuat admin, dan mengunci installer.</p>
+                                </div>
+
+                                <div class="ui fluid segment bordered shadowless">
+                                    <div class="ui relaxed list">
+                                        <div class="item">
+                                            <i class="check teal icon"></i>
+                                            <div class="content">Database dibuat lebih dulu dari panel hosting</div>
+                                        </div>
+                                        <div class="item">
+                                            <i class="check teal icon"></i>
+                                            <div class="content">Tabel aplikasi dibuat otomatis oleh installer PHP</div>
+                                        </div>
+                                        <div class="item">
+                                            <i class="check teal icon"></i>
+                                            <div class="content">Install lock dibuat otomatis setelah sukses</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="ui fluid yellow message">
+                                    <div class="header mb-1">Catatan</div>
+                                    <p class="mb-0">Mode lanjutan untuk membuat database otomatis belum diaktifkan.
+                                        Untuk sekarang, cukup siapkan database dan user MySQL dari panel hosting dulu.</p>
+                                </div>
+                            </div>
+
+                            <div class="step requirements" :class="{ active: stepIsActive(2) }">
                                 <div class="table wrapper">
                                     <table class="ui celled table">
                                         <tbody>
@@ -304,7 +346,7 @@
                                 </div>
                             </div>
 
-                            <div class="step database" :class="{ active: stepIsActive(2) }">
+                            <div class="step database" :class="{ active: stepIsActive(3) }">
                                 <div class="field">
                                     <label>{{ __('Database host') }}</label>
                                     <input type="text" required name="database[host]"
@@ -335,7 +377,7 @@
                                 </div>
                             </div>
 
-                            <div class="step admin" :class="{ active: stepIsActive(3) }">
+                            <div class="step admin" :class="{ active: stepIsActive(4) }">
                                 <div class="ui info small message">
                                     Submit akan otomatis menjalankan migrasi database, membuat akun admin, dan membuat
                                     install lock agar installer tidak terpakai ulang tanpa sengaja.
@@ -366,9 +408,9 @@
                             <button class="ui d-none  large previeus button ml-0 mr-auto" @click="navigateSteps(-1)"
                                 type="button" :class="{ disabled: stepIsActive(1) }">{{ __('Previous') }}</button>
                             <button class="ui large next button ml-auto mr-0" @click="navigateSteps(1)"
-                                type="button" v-if="step <= 2">{{ __('Next') }}</button>
+                                type="button" v-if="step <= 3">{{ __('Next') }}</button>
                             <button class="ui large yellow button ml-auto mr-0" type="button" @click="submitForm"
-                                v-if="step == 3">{{ __('Submit') }}</button>
+                                v-if="step == 4">{{ __('Submit') }}</button>
                         </div>
                     </div>
 
@@ -391,7 +433,7 @@
 
                 navigateSteps: function(number) {
 
-                    if (this.step + number > 3 || this.step + number < 1) {
+                    if (this.step + number > 4 || this.step + number < 1) {
                         return false;
                     }
 
