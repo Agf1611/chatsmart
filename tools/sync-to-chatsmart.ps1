@@ -29,6 +29,12 @@ $excludeDirs = @(
     (Join-Path $sourceFull 'credentials'),
     (Join-Path $sourceFull 'dist'),
     (Join-Path $sourceFull 'tmp'),
+    (Join-Path $sourceFull 'storage\app\backups'),
+    (Join-Path $sourceFull 'storage\app\file-manager'),
+    (Join-Path $sourceFull 'storage\app\files'),
+    (Join-Path $sourceFull 'storage\app\public'),
+    (Join-Path $sourceFull 'storage\app\temp'),
+    (Join-Path $sourceFull 'storage\app\wachecker'),
     (Join-Path $sourceFull 'storage\logs'),
     (Join-Path $sourceFull 'storage\framework\cache'),
     (Join-Path $sourceFull 'storage\framework\sessions'),
@@ -40,7 +46,8 @@ $excludeDirs = @(
 $excludeFiles = @(
     '.env',
     '.env.backup',
-    '.DS_Store'
+    '.DS_Store',
+    'sickas_rules_snapshot.txt'
 )
 
 $roboArgs = @(

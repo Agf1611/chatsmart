@@ -39,8 +39,14 @@
             <div class="toolbar-actions">
                 <form action="{{ route('fetch.groups') }}" method="post">
                     @csrf
-                    <input type="hidden" name="device"
-                        value="{{ Session::has('selectedDevice') ? Session::get('selectedDevice')['device_id'] : '' }}">
+                    <select name="device" class="form-select" required>
+                        <option value="">Pilih device connected</option>
+                        @foreach ($devices as $device)
+                            <option value="{{ $device->id }}" @selected((string) old('device', $selectedDeviceId) === (string) $device->id)>
+                                {{ $device->body }} ({{ $device->status }})
+                            </option>
+                        @endforeach
+                    </select>
                     <button type="submit" class="btn btn-primary">
                         Fetch Device <i class="bi bi-whatsapp ms-2"></i>
                     </button>
@@ -183,5 +189,17 @@
         </div>
     </div>
 
-    <script src="{{ asset('js/phonebook.js') }}"></script>
+    <script>
+        window.phonebookRoutes = {
+            getPhonebook: @json(route('getPhonebook')),
+            clearPhonebook: @json(route('clearPhonebook')),
+            getContactBase: @json(url('get-contact')),
+            contactStore: @json(route('contact.store')),
+            contactDeleteBase: @json(url('contact/delete')),
+            contactDeleteAllBase: @json(url('contact/delete-all')),
+            contactImport: @json(route('import')),
+            contactExportBase: @json(url('contact/export')),
+        };
+    </script>
+    <script src="{{ asset('js/phonebook.js') }}?v={{ filemtime(public_path('js/phonebook.js')) }}"></script>
 </x-layout-dashboard>

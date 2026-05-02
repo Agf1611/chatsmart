@@ -37,7 +37,8 @@
                     </a>
                 </li>
                 <li class="nav-item dropdown">
-                    <a class="nav-link top-action dropdown-toggle" href="#" id="languageDropdown" role="button"
+                    <a class="nav-link top-action dropdown-toggle dropdown-toggle-nocaret" href="#"
+                        id="languageDropdown" role="button"
                         data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-globe2"></i>
                     </a>
@@ -57,16 +58,9 @@
                 </li>
                 <li class="nav-item dropdown dropdown-user-setting">
                     <a class="nav-link dropdown-toggle dropdown-toggle-nocaret user-chip" href="#"
-                        data-bs-toggle="dropdown">
+                        data-bs-toggle="dropdown" aria-label="Buka menu pengguna">
                         <span class="user-chip__avatar">
                             <img src="{{ asset('assets/images/avatars/avatar-1.png') }}" class="user-img" alt="">
-                        </span>
-                        <div class="user-chip__meta">
-                            <strong>{{ Auth::user()->username }}</strong>
-                            <span>{{ ucfirst(Auth::user()->level) }}</span>
-                        </div>
-                        <span class="user-chip__chevron">
-                            <i class="bi bi-chevron-down"></i>
                         </span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">

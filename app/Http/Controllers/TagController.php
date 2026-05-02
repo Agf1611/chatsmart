@@ -20,8 +20,16 @@ class TagController extends Controller
         $this->wa = $whatsappService; 
     }
   
-    public function index(){
-        return view('pages.phonebook.index');
+    public function index(Request $request){
+        $devices = $request->user()
+            ->devices()
+            ->orderByRaw("CASE WHEN status = 'Connected' THEN 0 ELSE 1 END")
+            ->latest('updated_at')
+            ->get();
+
+        $selectedDeviceId = session('selectedDevice.device_id');
+
+        return view('pages.phonebook.index', compact('devices', 'selectedDeviceId'));
     }
 
     public function getPhonebook(Request $request){
@@ -75,7 +83,10 @@ class TagController extends Controller
         if(!$request->device){
             return back()->with('alert',[ 'type' => 'danger','msg' => 'Please select device first!']);
         }
-        $device = Device::find($request->device);
+        $device = $request->user()->devices()->find($request->device);
+        if (!$device) {
+            return back()->with('alert', ['type' => 'danger', 'msg' => 'Selected device not found!']);
+        }
         if($device->status != 'Connected'){
                 return back()->with('alert', ['type' => 'danger', 'msg' => 'Your sender is not connected!' ]);
         }
@@ -100,7 +111,10 @@ class TagController extends Controller
                       $tag = $request->user()->phonebooks()->firstOrCreate(['name' => $validNamePhoneBook]);
                     
                    foreach ($group->participants as $member) {
-                      $number = str_replace('@s.whatsapp.net','',$member->id);
+                      $number = $this->extractPhonebookNumber($member->id ?? '');
+                      if ($number === '') {
+                          continue;
+                      }
                       $cek = $request->user()->contacts()->where('tag_id',$tag->id)->where('number',$number)->count();
                      if($cek < 1){
                           $tag->contacts()->create(['user_id' =>$request->user()->id,'name' => $number,'number' => $number]);
@@ -114,8 +128,8 @@ class TagController extends Controller
                 ]);
          
        } catch (\Throwable $th) {
-        throw $th;
-             return back()->with('alert',['type' => 'danger','msg' => 'Something went wrong! (fg)']);
+            report($th);
+            return back()->with('alert',['type' => 'danger','msg' => 'Failed to fetch data from the connected device. Please try again.']);
        }
     }
 
@@ -126,6 +140,26 @@ class TagController extends Controller
         } catch (\Throwable $th) {
             return response()->json(['error' => true,'msg' => 'Something went wrong! (cp)']);
         }
+    }
+
+    protected function extractPhonebookNumber(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $localPart = preg_replace('/@.+$/', '', $value);
+        $localPart = preg_replace('/:\d+$/', '', (string) $localPart);
+        $normalized = normalizePhoneNumber($localPart);
+
+        if ($normalized !== '' && strlen($normalized) <= 20) {
+            return $normalized;
+        }
+
+        $digits = preg_replace('/\D+/', '', $localPart);
+
+        return strlen($digits) <= 20 ? $digits : '';
     }
 
 }

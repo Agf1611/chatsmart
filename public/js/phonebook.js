@@ -1,5 +1,40 @@
 // on ready
 let activePhoneBook = undefined;
+function resolvePhonebookBasePath() {
+  const path = window.location.pathname || "";
+  const marker = "/phonebook";
+  const index = path.lastIndexOf(marker);
+
+  if (index !== -1) {
+    return path.slice(0, index);
+  }
+
+  return path.replace(/\/+$/, "");
+}
+
+function buildPhonebookUrl(path) {
+  const basePath = resolvePhonebookBasePath();
+  const cleanPath = String(path || "").replace(/^\/+/, "");
+  return `${basePath}/${cleanPath}`.replace(/([^:]\/)\/+/g, "$1");
+}
+
+const phonebookRoutes = window.phonebookRoutes || {
+  getPhonebook: buildPhonebookUrl("get-phonebook"),
+  clearPhonebook: buildPhonebookUrl("clear-phonebook"),
+  getContactBase: buildPhonebookUrl("get-contact"),
+  contactStore: buildPhonebookUrl("contact/store"),
+  contactDeleteBase: buildPhonebookUrl("contact/delete"),
+  contactDeleteAllBase: buildPhonebookUrl("contact/delete-all"),
+  contactImport: buildPhonebookUrl("contact/import"),
+  contactExportBase: buildPhonebookUrl("contact/export"),
+};
+
+function showPhonebookRequestError(action) {
+  $(".load-phonebook").empty();
+  $(".load-more").hide();
+  toastr["error"](`${action} gagal. Silakan refresh lalu coba lagi.`);
+}
+
 function processLoadMore() {
   $(".load-more").html(
     '<i class="bx bx-loader bx-spin font-size-18 text-primary me-2"></i> Loading...'
@@ -21,7 +56,7 @@ function getPhoneBook(page = 1, search = "") {
     processLoadMore();
   }
   $.ajax({
-    url: "/get-phonebook?page=" + page + "&search=" + search,
+    url: phonebookRoutes.getPhonebook + "?page=" + page + "&search=" + search,
     method: "GET",
     dataType: "json",
     success: function (data) {
@@ -40,6 +75,10 @@ function getPhoneBook(page = 1, search = "") {
         $(".load-more").show();
       }
     },
+    error: function (xhr) {
+      console.error("Phonebook request failed", xhr);
+      showPhonebookRequestError("Load phonebook");
+    },
   });
 }
 
@@ -47,7 +86,7 @@ function clearPhonebook() {
   //confirm using default confirm
   if (confirm("Are you sure?")) {
     $.ajax({
-      url: "/clear-phonebook",
+      url: phonebookRoutes.clearPhonebook,
       headers: {
         "X-CSRF-TOKEN": $('meta[name="csrf-token"]').attr("content"),
       },
@@ -84,7 +123,7 @@ $(document).ready(function () {
 
 function getContact(id, page = 1, search = "") {
   $.ajax({
-    url: `/get-contact/${id}?page=${page}&search=${search}`,
+    url: `${phonebookRoutes.getContactBase}/${id}?page=${page}&search=${search}`,
     dataType: "json",
     method: "GET",
     success: function (data) {
@@ -107,6 +146,11 @@ function getContact(id, page = 1, search = "") {
                     >Load More</button> </div>`
         );
       }
+    },
+    error: function (xhr) {
+      console.error("Contact request failed", xhr);
+      toastr["error"]("Kontak gagal dimuat. Silakan pilih ulang phonebook.");
+      $(".contacts-list").html("");
     },
   });
 }
@@ -168,7 +212,7 @@ function addContact() {
 
 function deleteContact(id) {
   $.ajax({
-    url: `/contact/delete/${id}`,
+    url: `${phonebookRoutes.contactDeleteBase}/${id}`,
     headers: {
       "X-CSRF-TOKEN": $('meta[name="csrf-token"]').attr("content"),
     },
@@ -194,7 +238,7 @@ function deleteAllContact() {
   // confirm delete using alert
   if (confirm("Are you sure you want to delete all contacts?")) {
     $.ajax({
-      url: `/contact/delete-all/${activePhoneBook}`,
+      url: `${phonebookRoutes.contactDeleteAllBase}/${activePhoneBook}`,
       headers: {
         "X-CSRF-TOKEN": $('meta[name="csrf-token"]').attr("content"),
       },
@@ -226,7 +270,7 @@ $(".add-contact-form").submit(function (e) {
   $(".input_phonebookid").val(phonebook_id);
   const data = $(this).serialize();
   $.ajax({
-    url: "/contact/store",
+    url: phonebookRoutes.contactStore,
     method: "POST",
     data: data,
     dataType: "json",
@@ -266,7 +310,7 @@ $("#import-contact-form").submit(function (e) {
   data.append("file", $("#fileContacts")[0].files[0]);
 
   $.ajax({
-    url: "/contact/import",
+    url: phonebookRoutes.contactImport,
     method: "POST",
     data: data,
     dataType: "json",
@@ -298,5 +342,5 @@ function exportContact() {
     toastr["warning"]("Please select phonebook");
     return;
   }
-  window.location.href = `/contact/export/${activePhoneBook}`;
+  window.location.href = `${phonebookRoutes.contactExportBase}/${activePhoneBook}`;
 }
