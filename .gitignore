@@ -1,6 +1,16 @@
 /node_modules
 /dist
 /tmp
+/credentials/*
+/storage/app/backups/*
+/storage/app/file-manager/*
+/storage/app/files/*
+/storage/app/public/files/*
+/storage/app/public/images/*
+/storage/app/public/number-checker/*
+/storage/app/public/photos/*
+/storage/app/temp/*
+/storage/app/wachecker/*
 /storage/logs/*
 /storage/framework/cache/*
 /storage/framework/sessions/*
@@ -9,7 +19,6 @@
 /storage/app/backups/*
 /bootstrap/cache/*.php
 /public/storage
-/credentials
 .env
 .env.backup
 Thumbs.db
