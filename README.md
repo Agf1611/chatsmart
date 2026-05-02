@@ -1,6 +1,37 @@
-# WHASTAPP Hosting Package
+# ChatSmart Source Package
 
 Paket ini adalah source aplikasi Laravel + Node.js yang sudah dibersihkan untuk deployment mandiri.
+
+## Struktur Kerja
+
+- Folder kerja lokal aktif saat ini: `C:\xampp\htdocs\whastapp`
+- Folder source utama yang terhubung ke GitHub: `C:\xampp\htdocs\whastapp\chatsmart`
+
+Jika ada perubahan baru di folder kerja utama, sinkronkan ke folder GitHub dengan:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\sync-to-chatsmart.ps1
+```
+
+Atau:
+
+```bat
+tools\sync-to-chatsmart.bat
+```
+
+Script sinkronisasi akan menyalin source aplikasi ke `chatsmart` tanpa membawa file sensitif dan runtime lokal seperti `.env`, `credentials`, `node_modules`, dan log/cache sementara.
+
+Jika ingin sinkronisasi otomatis saat ada file berubah:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\start-chatsmart-sync-watcher.ps1
+```
+
+Untuk menghentikannya:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\stop-chatsmart-sync-watcher.ps1
+```
 
 ## Kebutuhan
 

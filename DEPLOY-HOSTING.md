@@ -1,59 +1,70 @@
-Shared hosting deployment notes
+# Deploy Hosting
 
-Requirements
+## Source yang Dipakai
 
-- PHP 8.x with common Laravel extensions
-- MySQL or MariaDB
-- Node.js support on hosting, or SSH access to run the Node gateway
-- ability to make `storage/` and `bootstrap/cache/` writable
+Untuk rilis, instalasi baru, dan update lanjutan, gunakan source dari folder:
 
-Recommended layout
+`C:\xampp\htdocs\whastapp\chatsmart`
 
-1. Upload and extract this package in the app directory on hosting.
-2. Copy `.env.example` to `.env`.
-3. Update `.env` at minimum:
-   - `APP_URL=https://your-domain.example`
-   - `DB_HOST`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`
-   - `WA_URL_SERVER=https://node.your-domain.example`
-   - `AUTH` with a long random string
+Jika pengembangan masih dilakukan di folder induk `whastapp`, sinkronkan dulu perubahan terbaru ke folder `chatsmart` memakai:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\sync-to-chatsmart.ps1
+```
+
+## Paket Yang Dipakai
+
+Gunakan file zip rilis bersih dari folder `dist/`.
+
+## Langkah Cepat
+
+1. Upload zip ke hosting.
+2. Extract ke folder aplikasi.
+3. Copy `.env.example` menjadi `.env`.
+4. Isi:
+   - `APP_URL=https://domain-kamu`
+   - `WA_URL_SERVER=https://subdomain-node-kamu`
+   - `DB_HOST`
+   - `DB_DATABASE`
+   - `DB_USERNAME`
+   - `DB_PASSWORD`
+   - `AUTH`
    - `CORS_ALLOWED_ORIGINS`
-4. Keep `APP_INSTALLED=false` until you finish the installer.
+5. Jalankan:
+```bash
+composer install --no-dev --optimize-autoloader
+npm ci --omit=dev
+php artisan storage:link
+```
+6. Pastikan permission `storage/` dan `bootstrap/cache/` bisa ditulis.
+7. Start aplikasi Node dengan startup file `server.js`.
+8. Buka `/install` lalu selesaikan wizard.
 
-Web server
+## Rekomendasi cPanel / Shared Hosting
 
-- If your hosting lets you set document root to `public/`, do that.
-- If not, this package already includes a root `.htaccess` that forwards requests into `public/`.
+- App root: folder project hasil extract
+- Startup file Node: `server.js`
+- Node version: `18+`
+- Document root web: `public/` jika hosting mendukung
 
-Node app
+## Sesudah Install
 
-- Preferred for cPanel/Passenger:
-  - app root: this package folder
-  - startup file: `server.js`
-  - Node version: 18+ if available
-- Install dependencies on hosting:
-  - `npm ci --omit=dev`
-- Start or restart the Node app from the hosting panel.
-- This app now supports hosting-provided `PORT` automatically.
+- Set `APP_INSTALLED=true` akan diisi otomatis oleh installer
+- cek login admin
+- ganti password admin
+- rotasi `AUTH` bila sebelumnya memakai nilai contoh
 
-Laravel
+## Isi Paket Rilis
 
-- If composer is available, run:
-  - `composer install --no-dev --optimize-autoloader`
-- Ensure writable permissions:
-  - `storage/`
-  - `bootstrap/cache/`
-- Recreate storage link on hosting:
-  - `php artisan storage:link`
+- source Laravel
+- source Node gateway
+- `vendor/`
+- `.env.example`
+- panduan deploy
 
-Finish install
+Yang tidak ikut:
 
-1. Open `/install`
-2. Fill database and admin account
-3. After install, confirm login works
-4. Rotate the temporary or initial admin password immediately
-
-Important
-
-- If your hosting does not support Node.js apps, WhatsApp gateway features will not run correctly.
-- `node_modules` is intentionally excluded so packages are built natively on Linux.
-- `.env` active file is intentionally excluded from this zip.
+- `.env` aktif
+- `node_modules`
+- cache, session, log runtime
+- file upload/contoh lama

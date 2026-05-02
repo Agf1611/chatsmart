@@ -238,9 +238,16 @@
                             <tr>
                                 <td><span class="device-index">{{ $loop->iteration }}</span></td>
                                 <td>
-                                    <div class="number-stack">
-                                        <span class="number-stack__icon"><i class="bi bi-whatsapp"></i></span>
-                                        <div>
+                                    <div class="device-profile">
+                                        <span class="device-avatar">
+                                            <img src="{{ asset('assets/images/avatars/avatar-1.png') }}"
+                                                alt="Avatar perangkat {{ $number['body'] }}"
+                                                class="device-avatar__image">
+                                            <span class="device-avatar__badge">
+                                                <i class="bi bi-whatsapp"></i>
+                                            </span>
+                                        </span>
+                                        <div class="device-meta">
                                             <strong>{{ $number['body'] }}</strong>
                                             <span>ChatSmart Device</span>
                                         </div>

@@ -1,0 +1,16 @@
+/node_modules
+/dist
+/tmp
+/storage/logs/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+/storage/app/backups/*
+/bootstrap/cache/*.php
+/public/storage
+/credentials
+.env
+.env.backup
+Thumbs.db
+.DS_Store
