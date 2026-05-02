@@ -21,9 +21,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::post('/internal/ai/respond', [\App\Http\Controllers\Api\InternalAiController::class, 'respond']);
+Route::post('/internal/ai/respond', [\App\Http\Controllers\Api\InternalAiController::class, 'respond'])->middleware('throttle:internal-ai');
 
-Route::middleware('checkApiKey')->group(function () {
+Route::middleware(['checkApiKey', 'throttle:message-api'])->group(function () {
     Route::post('/send-message', [ApiController::class, 'messageText']);
     Route::post('/send-media', [ApiController::class, 'messageMedia']);
     Route::post('/send-button', [ApiController::class, 'messageButton']);
@@ -34,4 +34,4 @@ Route::middleware('checkApiKey')->group(function () {
     Route::post('/logout-device', [DeviceController::class, 'logoutDevice']);
     Route::post('/delete-device', [DeviceController::class, 'deleteDevice']);
 });
-Route::post('/generate-qr', [ApiController::class, 'generateQr']);
+Route::post('/generate-qr', [ApiController::class, 'generateQr'])->middleware('throttle:message-api');

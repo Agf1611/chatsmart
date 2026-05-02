@@ -16,12 +16,22 @@ class GithubUpdaterService
     {
         $status = [
             'configured' => (bool) config('services.github_updater.repo_url'),
-            'repo_url' => config('services.github_updater.repo_url'),
             'branch' => config('services.github_updater.branch', 'main'),
+            'mirror_path' => $this->getMirrorPath(),
+            'mirror_enabled' => $this->isMirrorEnabled(),
             'exclude_paths' => $this->getExcludedPaths(),
             'last_sync' => $this->readLastSync(),
             'remote' => null,
             'remote_error' => null,
+            'pending_changes' => [],
+            'pending_summary' => [
+                'total' => 0,
+                'added' => 0,
+                'modified' => 0,
+                'removed' => 0,
+                'renamed' => 0,
+            ],
+            'is_up_to_date' => false,
         ];
 
         if (!$status['configured']) {
@@ -30,6 +40,10 @@ class GithubUpdaterService
 
         try {
             $status['remote'] = $this->fetchRemoteStatus();
+            $pending = $this->resolvePendingChanges($status['remote'], $status['last_sync']);
+            $status['pending_changes'] = $pending['files'];
+            $status['pending_summary'] = $pending['summary'];
+            $status['is_up_to_date'] = $pending['is_up_to_date'];
         } catch (Throwable $e) {
             $status['remote_error'] = $e->getMessage();
         }
@@ -55,6 +69,7 @@ class GithubUpdaterService
             $summary = array_merge($result, [
                 'repository' => $remote['repository'],
                 'branch' => $remote['branch'],
+                'mirror_path' => $this->getMirrorPath(),
                 'latest_commit' => $remote['latest_commit'],
                 'latest_commit_short' => $remote['latest_commit_short'],
                 'latest_message' => $remote['latest_message'],
@@ -97,12 +112,15 @@ class GithubUpdaterService
 
         return [
             'repository' => $repository['owner'] . '/' . $repository['repo'],
+            'owner' => $repository['owner'],
+            'repo' => $repository['repo'],
             'branch' => $branch,
             'is_private' => (bool) data_get($repoData, 'private', false),
             'latest_commit' => $sha,
             'latest_commit_short' => $sha !== '' ? substr($sha, 0, 7) : '-',
             'latest_message' => Str::before($message, "\n"),
             'latest_date' => data_get($commitData, 'commit.committer.date'),
+            'latest_files' => $this->normalizeFiles(data_get($commitData, 'files', [])),
             'archive_url' => sprintf(
                 'https://api.github.com/repos/%s/%s/zipball/%s',
                 $repository['owner'],
@@ -170,8 +188,12 @@ class GithubUpdaterService
             'unchanged_files' => 0,
             'skipped_files' => 0,
             'backed_up_files' => 0,
+            'mirrored_files' => 0,
             'sample_changed_files' => [],
         ];
+
+        $mirrorRoot = $this->getMirrorPath();
+        $mirrorEnabled = $this->isMirrorEnabled();
 
         foreach ($this->listSourceFiles($sourceRoot) as $sourcePath) {
             $relativePath = $this->relativePath($sourceRoot, $sourcePath);
@@ -201,6 +223,13 @@ class GithubUpdaterService
             }
 
             File::copy($sourcePath, $targetPath);
+
+            if ($mirrorEnabled) {
+                $mirrorTargetPath = $mirrorRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+                $this->ensureDirectory(dirname($mirrorTargetPath));
+                File::copy($sourcePath, $mirrorTargetPath);
+                $result['mirrored_files']++;
+            }
 
             if (count($result['sample_changed_files']) < 15) {
                 $result['sample_changed_files'][] = $relativePath;
@@ -361,6 +390,27 @@ class GithubUpdaterService
         }
     }
 
+    protected function getMirrorPath()
+    {
+        $configured = trim((string) config('services.github_updater.mirror_path', ''));
+        if ($configured === '') {
+            return null;
+        }
+
+        if (preg_match('~^[A-Za-z]:[\\\\/]~', $configured)) {
+            return $configured;
+        }
+
+        return base_path($configured);
+    }
+
+    protected function isMirrorEnabled()
+    {
+        $mirrorPath = $this->getMirrorPath();
+
+        return !empty($mirrorPath) && File::exists($mirrorPath) && File::isDirectory($mirrorPath);
+    }
+
     protected function readLastSync()
     {
         $path = storage_path('app/updater/last-sync.json');
@@ -376,5 +426,79 @@ class GithubUpdaterService
         $path = storage_path('app/updater/last-sync.json');
         $this->ensureDirectory(dirname($path));
         File::put($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    protected function resolvePendingChanges(array $remote, $lastSync)
+    {
+        $summary = [
+            'total' => 0,
+            'added' => 0,
+            'modified' => 0,
+            'removed' => 0,
+            'renamed' => 0,
+        ];
+
+        $lastCommit = data_get($lastSync, 'latest_commit');
+        if (!empty($lastCommit) && $lastCommit === $remote['latest_commit']) {
+            return [
+                'files' => [],
+                'summary' => $summary,
+                'is_up_to_date' => true,
+            ];
+        }
+
+        $files = [];
+        if (!empty($lastCommit)) {
+            $compareData = $this->githubJson(sprintf(
+                'repos/%s/%s/compare/%s...%s',
+                $remote['owner'],
+                $remote['repo'],
+                rawurlencode($lastCommit),
+                rawurlencode($remote['latest_commit'])
+            ));
+
+            $files = $this->normalizeFiles(data_get($compareData, 'files', []));
+        } else {
+            $files = $remote['latest_files'] ?? [];
+        }
+
+        foreach ($files as $file) {
+            $summary['total']++;
+            if (isset($summary[$file['status']])) {
+                $summary[$file['status']]++;
+            } else {
+                $summary['modified']++;
+            }
+        }
+
+        return [
+            'files' => array_slice($files, 0, 30),
+            'summary' => $summary,
+            'is_up_to_date' => false,
+        ];
+    }
+
+    protected function normalizeFiles(array $files)
+    {
+        return collect($files)
+            ->map(function ($file) {
+                $status = strtolower((string) data_get($file, 'status', 'modified'));
+
+                if (in_array($status, ['changed', 'copied'], true)) {
+                    $status = 'modified';
+                }
+
+                if (!in_array($status, ['added', 'modified', 'removed', 'renamed'], true)) {
+                    $status = 'modified';
+                }
+
+                return [
+                    'path' => (string) data_get($file, 'filename', ''),
+                    'status' => $status,
+                ];
+            })
+            ->filter(fn ($file) => $file['path'] !== '')
+            ->values()
+            ->all();
     }
 }

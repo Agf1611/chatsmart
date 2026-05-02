@@ -126,6 +126,7 @@
                                 <th>Reply When</th>
                                 <th>Akses</th>
                                 <th>Reply Type</th>
+                                <th>Transport</th>
                                 <th>Schedule</th>
                                 <th>Status</th>
                                 <th>Updated</th>
@@ -172,6 +173,15 @@
                                         @endif
                                     </td>
                                     <td>{{ $replyTypes[$autoreply->type] ?? ucfirst($autoreply->type) }}</td>
+                                    <td>
+                                        @php
+                                            $transportLabel = $transportPolicies[$autoreply->transport_policy] ?? 'Text fallback';
+                                            $transportClass = $autoreply->transport_policy === 'interactive_preferred'
+                                                ? 'bg-light-success text-success'
+                                                : 'bg-light-warning text-warning';
+                                        @endphp
+                                        <span class="badge {{ $transportClass }}">{{ $transportLabel }}</span>
+                                    </td>
                                     <td class="small text-muted">{{ $scheduleLabel }}</td>
                                     <td>
                                         <div class="form-check form-switch">

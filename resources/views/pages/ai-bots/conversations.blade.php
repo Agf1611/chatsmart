@@ -139,7 +139,9 @@
                                             {{ ucfirst($conversation->status) }}
                                         </span>
                                         @if ($conversation->paused_reason)
-                                            <div class="small text-muted mt-2">{{ $conversation->paused_reason }}</div>
+                                            <div class="small text-muted mt-2">
+                                                <strong>Sumber pause:</strong> {{ $conversation->paused_reason }}
+                                            </div>
                                         @endif
                                     </td>
                                     <td class="small text-muted">{{ \Illuminate\Support\Str::limit($conversation->last_user_message, 80) ?: '-' }}</td>

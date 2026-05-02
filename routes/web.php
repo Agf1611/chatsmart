@@ -3,6 +3,7 @@
 
 use App\Http\Controllers\Admin\ManageUsersController;
 use App\Http\Controllers\Admin\DatabaseToolController;
+use App\Http\Controllers\Admin\OperationalAuditController;
 use App\Http\Controllers\Admin\UpdateController;
 use App\Http\Controllers\AiBotController;
 use App\Http\Controllers\AiConversationController;
@@ -59,7 +60,7 @@ Route::middleware('auth')->group(function (){
     Route::delete('/autoreply/{autoreply:id}',[AutoreplyController::class,'destroy'])->name('autoreply.delete');
     Route::post('/autoreply/{autoreply:id}/duplicate',[AutoreplyController::class,'duplicate'])->name('autoreply.duplicate');
     Route::post('/autoreply/{autoreply:id}/toggle-status',[AutoreplyController::class,'toggleStatus'])->name('autoreply.toggle-status');
-    Route::post('/autoreply/simulate',[AutoreplyController::class,'simulate'])->name('autoreply.simulate');
+    Route::post('/autoreply/simulate',[AutoreplyController::class,'simulate'])->middleware('throttle:preview-message')->name('autoreply.simulate');
 
     Route::get('/ai-bots',[AiBotController::class,'index'])->name('ai-bots.index');
     Route::get('/ai-bots/create',[AiBotController::class,'create'])->name('ai-bots.create');
@@ -81,7 +82,7 @@ Route::middleware('auth')->group(function (){
     Route::post('/contact/store',[ContactController::class,'store'])->name('contact.store');
     Route::delete('/contact/delete/{contact:id}',[ContactController::class,'destroy'])->name('contact.delete');
     Route::delete('/contact/delete-all/{id}',[ContactController::class,'DestroyAll'])->name('deleteAll');
-    Route::post('/contact/import',[ContactController::class,'import'])->name('import');
+    Route::post('/contact/import',[ContactController::class,'import'])->middleware('throttle:import-contacts')->name('import');
     Route::get('/contact/export/{id}',[ContactController::class,'export'])->name('exportContact');
 
   Route::post('/tags',[TagController::class,'store'])->name('tag.store');
@@ -99,13 +100,13 @@ Route::middleware('auth')->group(function (){
   Route::delete('/campaign/clear',[CampaignController::class,'destroyAll'])->name('campaigns.delete.all');
   Route::get('/campaign/blast/{campaign:id}',[BlastController::class,'index'])->name('campaign.blasts');
 
-  Route::post('/preview-message',[ShowMessageController::class,'index'])->name('previewMessage');
+  Route::post('/preview-message',[ShowMessageController::class,'index'])->middleware('throttle:preview-message')->name('previewMessage');
   Route::get('/form-message/{type}',[ShowMessageController::class,'getFormByType'])->name('formMessage');
   
 
 
   Route::get('/message/test',[MessagesController::class,'index'])->name('messagetest');
-  Route::post('/message/test',[MessagesController::class,'store'])->name('messagetest');
+  Route::post('/message/test',[MessagesController::class,'store'])->middleware('throttle:message-send')->name('messagetest');
 
   Route::get('/api-docs',RestapiController::class)->name('rest-api');
 
@@ -121,6 +122,7 @@ Route::middleware('auth')->group(function (){
   Route::post('/settings/ai-bot',[SettingController::class,'setAiBotSettings'])->name('settings.ai-bot')->middleware('admin');
   Route::get('/admin/update',[UpdateController::class,'index'])->name('admin.update')->middleware('admin');
   Route::post('/admin/update/sync',[UpdateController::class,'sync'])->name('admin.update.sync')->middleware('admin');
+  Route::get('/admin/operational-audit',[OperationalAuditController::class,'index'])->name('admin.operational-audit')->middleware('admin');
   Route::get('/admin/database-tools',[DatabaseToolController::class,'index'])->name('admin.database-tools')->middleware('admin');
   Route::post('/admin/database-tools/backup',[DatabaseToolController::class,'createBackup'])->name('admin.database-tools.backup')->middleware('admin');
   Route::post('/admin/database-tools/restore',[DatabaseToolController::class,'restore'])->name('admin.database-tools.restore')->middleware('admin');
@@ -135,8 +137,8 @@ Route::middleware('auth')->group(function (){
   Route::post('admin/user/update',[ManageUsersController::class,'update'])->name('user.update')->middleware('admin');
 
   Route::get('/messages-history',[MessagesHistoryController::class,'index'])->name('messages.history');
-  Route::post('/resend-message',[MessagesHistoryController::class,'resend'])->name('resend.message');
-  Route::post('/messages-history/resend-failed',[MessagesHistoryController::class,'resendFailed'])->name('messages.history.resend-failed');
+  Route::post('/resend-message',[MessagesHistoryController::class,'resend'])->middleware('throttle:message-send')->name('resend.message');
+  Route::post('/messages-history/resend-failed',[MessagesHistoryController::class,'resendFailed'])->middleware('throttle:message-send')->name('messages.history.resend-failed');
   Route::delete('/messages-history/{messageHistory:id}',[MessagesHistoryController::class,'destroy'])->name('messages.history.delete');
   Route::delete('/messages-history',[MessagesHistoryController::class,'clear'])->name('messages.history.clear');
 

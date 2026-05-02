@@ -106,6 +106,9 @@
                         <li class="{{ request()->is('admin/update') ? 'active' : '' }}">
                             <a href="{{ route('admin.update') }}"><i class="bi bi-circle"></i>{{ __('system.update') }}</a>
                         </li>
+                        <li class="{{ request()->is('admin/operational-audit*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.operational-audit') }}"><i class="bi bi-circle"></i>Operational Audit</a>
+                        </li>
                         <li class="{{ request()->is('admin/database-tools*') ? 'active' : '' }}">
                             <a href="{{ route('admin.database-tools') }}"><i class="bi bi-circle"></i>{{ __('system.database_tools') }}</a>
                         </li>

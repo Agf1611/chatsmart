@@ -10,6 +10,8 @@ const {
   getRegisteredPhonebookIdsForNumber,
   isContactPaused,
   pauseContactForOperator,
+  resumeContactPause,
+  saveAutoReplyHistory,
 } = require("../database/model");
 
 require("dotenv").config();
@@ -119,6 +121,11 @@ function normalizePhoneNumber(value) {
   return digits;
 }
 
+function isResumeBotCommand(command) {
+  const normalizedCommand = String(command || "").trim().toLowerCase();
+  return normalizedCommand === "menu";
+}
+
 async function pickEligibleReply(replies, remoteJid, senderNumber) {
   const normalizedSender = normalizePhoneNumber(senderNumber);
   for (const reply of replies) {
@@ -191,6 +198,194 @@ function normalizeWebhookResponse(response) {
   }
 
   return response;
+}
+
+function isInteractivePayload(replyPayload) {
+  if (!replyPayload || typeof replyPayload !== "object" || Array.isArray(replyPayload)) {
+    return false;
+  }
+
+  return (
+    Array.isArray(replyPayload.buttons) ||
+    Array.isArray(replyPayload.sections) ||
+    Array.isArray(replyPayload.templateButtons)
+  );
+}
+
+function isListPayload(replyPayload) {
+  return (
+    replyPayload &&
+    typeof replyPayload === "object" &&
+    !Array.isArray(replyPayload) &&
+    Array.isArray(replyPayload.sections)
+  );
+}
+
+function supportsSafeInteractiveSync(remoteJid) {
+  const jid = String(remoteJid || "").toLowerCase();
+  return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@g.us");
+}
+
+function interactivePayloadToText(replyPayload) {
+  if (!isInteractivePayload(replyPayload)) {
+    return replyPayload;
+  }
+
+  const lines = [];
+  const mainText = replyPayload.text || replyPayload.caption || "";
+  if (mainText) {
+    lines.push(mainText);
+  }
+
+  if (Array.isArray(replyPayload.sections)) {
+    replyPayload.sections.forEach((section) => {
+      const title = section?.title ? String(section.title).trim() : "";
+      if (title) {
+        lines.push("");
+        lines.push(title);
+      }
+
+      const rows = Array.isArray(section?.rows) ? section.rows : [];
+      rows.forEach((row, index) => {
+        const rowTitle = row?.title ? String(row.title).trim() : `Opsi ${index + 1}`;
+        const rowDescription = row?.description ? String(row.description).trim() : "";
+        lines.push(`${index + 1}. ${rowTitle}${rowDescription ? ` - ${rowDescription}` : ""}`);
+      });
+    });
+  }
+
+  if (Array.isArray(replyPayload.buttons)) {
+    lines.push("");
+    replyPayload.buttons.forEach((button, index) => {
+      const label = button?.buttonText?.displayText || button?.buttonId || `Tombol ${index + 1}`;
+      lines.push(`${index + 1}. ${String(label).trim()}`);
+    });
+  }
+
+  if (Array.isArray(replyPayload.templateButtons)) {
+    lines.push("");
+    replyPayload.templateButtons.forEach((button, index) => {
+      const urlLabel = button?.urlButton?.displayText;
+      const callLabel = button?.callButton?.displayText;
+      const label = urlLabel || callLabel || `Template ${index + 1}`;
+      lines.push(`${index + 1}. ${String(label).trim()}`);
+    });
+  }
+
+  if (replyPayload.footer) {
+    lines.push("");
+    lines.push(replyPayload.footer);
+  }
+
+  return {
+    text: lines.filter((line, index, items) => {
+      if (line !== "") {
+        return true;
+      }
+
+      return index > 0 && items[index - 1] !== "";
+    }).join("\n").trim(),
+  };
+}
+
+function normalizeReplyPayloadForTransport(replyPayload, remoteJid) {
+  return resolveTransportPayload(replyPayload, remoteJid, null).payload;
+}
+
+function resolveTransportPayload(replyPayload, remoteJid, matchedReply) {
+  const policy = String(matchedReply?.transport_policy || "").trim() || "text_fallback";
+  const defaultDecision = {
+    payload: replyPayload,
+    mode: "original",
+    policy,
+    reason: "non-interactive",
+  };
+
+  if (!isInteractivePayload(replyPayload)) {
+    return defaultDecision;
+  }
+
+  if (policy === "text_fallback") {
+    return {
+      payload: interactivePayloadToText(replyPayload),
+      mode: "fallback_text",
+      policy,
+      reason: "policy-forced",
+    };
+  }
+
+  if (isListPayload(replyPayload)) {
+    return {
+      payload: replyPayload,
+      mode: "interactive",
+      policy,
+      reason: "list-allowed",
+    };
+  }
+
+  if (supportsSafeInteractiveSync(remoteJid)) {
+    return {
+      payload: replyPayload,
+      mode: "interactive",
+      policy,
+      reason: "safe-sync-target",
+    };
+  }
+
+  return {
+    payload: interactivePayloadToText(replyPayload),
+    mode: "fallback_text",
+    policy,
+    reason: "unsafe-sync-target",
+  };
+}
+
+function inferHistoryType(payload, matchedReply) {
+  if (matchedReply?.type === "ai") {
+    return "text";
+  }
+
+  if (typeof payload === "string") {
+    return "text";
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return matchedReply?.type || "text";
+  }
+
+  if (payload.text) {
+    return "text";
+  }
+
+  if (payload.image || payload.video || payload.document || payload.audio || payload.type) {
+    return "media";
+  }
+
+  if (Array.isArray(payload.sections)) {
+    return "list";
+  }
+
+  if (Array.isArray(payload.buttons)) {
+    return "button";
+  }
+
+  if (Array.isArray(payload.templateButtons)) {
+    return "template";
+  }
+
+  return matchedReply?.type || "text";
+}
+
+function extractHistoryMessage(payload) {
+  if (typeof payload === "string") {
+    return payload;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  return String(payload.text || payload.caption || payload.footer || "Auto reply sent").trim();
 }
 
 async function sendWebhook({ command, bufferImage, from, url, participant }) {
@@ -346,13 +541,21 @@ const IncomingMessage = async (upsert, sock) => {
     const isPausedForOperator = await isContactPaused(deviceBody, chatIdentity);
 
     if (isPausedForOperator) {
-      await saveIncomingMessageLog(deviceBody, chatIdentity);
-      console.log("[autoreply] contact-paused", {
-        deviceBody,
-        chatIdentity,
-        command,
-      });
-      return;
+      if (isResumeBotCommand(command)) {
+        await resumeContactPause(deviceBody, chatIdentity);
+        console.log("[autoreply] contact-resumed-by-menu", {
+          deviceBody,
+          chatIdentity,
+        });
+      } else {
+        await saveIncomingMessageLog(deviceBody, chatIdentity);
+        console.log("[autoreply] contact-paused", {
+          deviceBody,
+          chatIdentity,
+          command,
+        });
+        return;
+      }
     }
 
     let shouldQuote = false;
@@ -421,6 +624,7 @@ const IncomingMessage = async (upsert, sock) => {
         id: matchedReply.id,
         keyword: matchedReply.keyword,
         type: matchedReply.type,
+        transportPolicy: matchedReply.transport_policy || "text_fallback",
         shouldQuote,
       });
     } else {
@@ -449,7 +653,30 @@ const IncomingMessage = async (upsert, sock) => {
     }
 
     const finalPayload = replaceTemplateVariables(replyPayload, pushName);
-    await sendAutoReply(sock, message, finalPayload, shouldQuote);
+    const transportDecision = resolveTransportPayload(finalPayload, message.key.remoteJid, matchedReply);
+    const transportPayload = transportDecision.payload;
+    if (transportDecision.mode === "fallback_text") {
+      console.log("[autoreply] interactive-fallback-text", {
+        deviceBody,
+        remoteJid: message.key.remoteJid,
+        ruleId: matchedReply?.id || null,
+        policy: transportDecision.policy,
+        reason: transportDecision.reason,
+      });
+    }
+
+    await sendAutoReply(sock, message, transportPayload, shouldQuote);
+    await saveAutoReplyHistory(
+      deviceBody,
+      normalizePhoneNumber(senderNumber) || chatIdentity,
+      inferHistoryType(transportPayload, matchedReply),
+      extractHistoryMessage(transportPayload),
+      JSON.stringify(transportPayload || {}),
+      "success",
+      matchedReply
+        ? `Auto reply: ${matchedReply.name || matchedReply.keyword || matchedReply.type} | transport=${transportDecision.policy}:${transportDecision.mode}`
+        : `Webhook auto reply | transport=${transportDecision.mode}`
+    );
 
     if (shouldPauseForOperatorHandoff(matchedReply, command)) {
       await pauseContactForOperator(
@@ -470,7 +697,12 @@ const IncomingMessage = async (upsert, sock) => {
     console.log("[autoreply] reply-sent", {
       deviceBody,
       command,
-      type: typeof finalPayload === "string" ? "text" : finalPayload?.type || Object.keys(finalPayload || {})[0],
+      transportPolicy: transportDecision.policy,
+      transportMode: transportDecision.mode,
+      type:
+        typeof transportPayload === "string"
+          ? "text"
+          : transportPayload?.type || Object.keys(transportPayload || {})[0],
     });
     return true;
   } catch (error) {

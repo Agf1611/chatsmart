@@ -1,4 +1,4 @@
-<x-layout-dashboard title="Update Version">
+<x-layout-dashboard title="System Update">
     <div class="page-breadcrumb d-none d-sm-flex align-items-center mb-3">
         <div class="breadcrumb-title pe-3">Admin</div>
         <div class="ps-3">
@@ -19,79 +19,66 @@
     @endif
 
     <section class="section-hero-card mb-4">
-        <p class="section-kicker mb-2">Maintenance Center</p>
-        <h3 class="section-title mb-2">GitHub updater & maintenance tools</h3>
-        <p class="hero-meta mb-0">Pantau versi aplikasi, cek status repository update, dan jalankan maintenance utama
-            dari dashboard admin yang sudah selaras dengan tema ChatSmart.</p>
+        <p class="section-kicker mb-2">Update Center</p>
+        <h3 class="section-title mb-2">System updater</h3>
+        <p class="hero-meta mb-0">
+            Halaman ini fokus untuk sinkronisasi update aplikasi dari repository utama tanpa menyentuh database.
+            Yang ditampilkan hanya status sinkronisasi dan file apa saja yang akan berubah.
+        </p>
     </section>
 
-    <div class="row row-cols-1 row-cols-lg-2 g-4">
-        <div class="col">
+    <div class="row g-4">
+        <div class="col-12 col-xl-4">
             <div class="smart-panel-card h-100 p-4">
-                <h5 class="mb-3">Version Information</h5>
-                <div class="smart-kpi-grid">
-                    <div class="smart-kpi">
-                        <span>Laravel App Version</span>
-                        <strong>{{ $release['app_version'] }}</strong>
-                    </div>
-                    <div class="smart-kpi">
-                        <span>Node Package Version</span>
-                        <strong>{{ $release['node_version'] }}</strong>
-                    </div>
-                    <div class="smart-kpi">
-                        <span>Server Type</span>
-                        <strong>{{ ucfirst($release['server_type']) }}</strong>
-                    </div>
-                    <div class="smart-kpi">
-                        <span>Node Port</span>
-                        <strong>{{ $release['node_port'] }}</strong>
-                    </div>
-                </div>
-                <div class="smart-kpi mt-3">
-                    <span>Node URL</span>
-                    <strong>{{ $release['node_url'] }}</strong>
-                </div>
-            </div>
-        </div>
+                <h5 class="mb-3">Status Update</h5>
 
-        <div class="col">
-            <div class="smart-panel-card h-100 p-4">
-                <h5 class="mb-3">GitHub Updater</h5>
                 <div class="smart-kpi-grid">
                     <div class="smart-kpi">
                         <span>Branch</span>
                         <strong>{{ $updaterStatus['remote']['branch'] ?? $updaterStatus['branch'] }}</strong>
                     </div>
                     <div class="smart-kpi">
-                        <span>Last Sync</span>
-                        <strong>{{ !empty($updaterStatus['last_sync']) ? ($updaterStatus['last_sync']['latest_commit_short'] ?? '-') : 'Belum sync' }}</strong>
+                        <span>Status</span>
+                        <strong>
+                            @if (!empty($updaterStatus['remote_error']))
+                                Gagal cek
+                            @elseif ($updaterStatus['is_up_to_date'])
+                                Sudah terbaru
+                            @else
+                                Update tersedia
+                            @endif
+                        </strong>
+                    </div>
+                    <div class="smart-kpi">
+                        <span>Commit terbaru</span>
+                        <strong>{{ $updaterStatus['remote']['latest_commit_short'] ?? '-' }}</strong>
+                    </div>
+                    <div class="smart-kpi">
+                        <span>Sync terakhir</span>
+                        <strong>{{ $updaterStatus['last_sync']['latest_commit_short'] ?? 'Belum pernah' }}</strong>
                     </div>
                 </div>
 
                 <div class="smart-kpi mt-3">
-                    <span>Repository</span>
-                    <strong>{{ $updaterStatus['repo_url'] ?: '-' }}</strong>
-                </div>
-
-                <div class="smart-kpi mt-3">
-                    <span>Latest Commit</span>
-                    <strong>
-                        @if (!empty($updaterStatus['remote']['latest_commit_short']))
-                            {{ $updaterStatus['remote']['latest_commit_short'] }}
-                        @else
-                            -
-                        @endif
-                    </strong>
-                    @if (!empty($updaterStatus['remote']['latest_message']))
-                        <div class="small text-muted mt-2">{{ $updaterStatus['remote']['latest_message'] }}</div>
+                    <span>Mirror repo lokal</span>
+                    <strong>{{ $updaterStatus['mirror_enabled'] ? 'Aktif' : 'Tidak aktif' }}</strong>
+                    @if (!empty($updaterStatus['mirror_path']))
+                        <div class="small text-muted mt-2">{{ $updaterStatus['mirror_path'] }}</div>
                     @endif
                 </div>
 
-                <div class="mt-3">
-                    @foreach ($updaterStatus['exclude_paths'] as $path)
-                        <span class="badge bg-light text-dark border me-1 mb-1">{{ $path }}</span>
-                    @endforeach
-                </div>
+                @if (!empty($updaterStatus['remote']['latest_message']))
+                    <div class="smart-panel-note mt-3">
+                        <div class="fw-semibold mb-1">Catatan commit terbaru</div>
+                        <div>{{ $updaterStatus['remote']['latest_message'] }}</div>
+                    </div>
+                @endif
+
+                @if (!empty($updaterStatus['last_sync']['synced_at']))
+                    <div class="small text-muted mt-3">
+                        Sync terakhir: {{ $updaterStatus['last_sync']['synced_at'] }}
+                    </div>
+                @endif
 
                 @if (!empty($updaterStatus['remote_error']))
                     <div class="alert border-0 bg-light-danger mt-3 mb-0">
@@ -100,42 +87,98 @@
                 @endif
 
                 <p class="text-muted mt-3 mb-3">
-                    Update hanya menimpa file yang berubah atau file baru. Database tidak disentuh, migration tidak
-                    dijalankan otomatis, dan file lokal penting tetap dilewati.
+                    Update hanya mengganti file yang berubah atau file baru. File penting lokal tetap dilewati dan database tidak direset.
                 </p>
 
                 <form action="{{ route('admin.update.sync') }}" method="POST"
-                    onsubmit="return confirm('Lanjut sync update dari GitHub? Database tidak akan direset, tetapi file aplikasi yang berbeda akan diperbarui.');">
+                    onsubmit="return confirm('Lanjut jalankan update sekarang? File aplikasi yang berbeda akan diperbarui, database tidak direset.');">
                     @csrf
-                    <button type="submit" class="btn btn-primary" {{ empty($updaterStatus['repo_url']) ? 'disabled' : '' }}>
-                        Sync Update dari GitHub
+                    <button type="submit" class="btn btn-primary w-100" {{ empty($updaterStatus['configured']) ? 'disabled' : '' }}>
+                        Jalankan Update
                     </button>
                 </form>
             </div>
         </div>
-    </div>
 
-    @if (!empty($updaterStatus['last_sync']['sample_changed_files']))
-        <div class="smart-panel-card mt-4 p-4">
-            <h5 class="mb-3">Sample Updated Files</h5>
-            <div class="row">
-                @foreach ($updaterStatus['last_sync']['sample_changed_files'] as $file)
-                    <div class="col-12 col-lg-6 mb-2">
-                        <code>{{ $file }}</code>
+        <div class="col-12 col-xl-8">
+            <div class="smart-panel-card h-100 p-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                        <h5 class="mb-1">Perubahan Update</h5>
+                        <p class="text-muted mb-0">Ringkasan file yang akan dibawa oleh update berikutnya.</p>
                     </div>
-                @endforeach
+                    <div class="smart-kpi-grid" style="min-width: min(100%, 360px);">
+                        <div class="smart-kpi">
+                            <span>Total</span>
+                            <strong>{{ $updaterStatus['pending_summary']['total'] }}</strong>
+                        </div>
+                        <div class="smart-kpi">
+                            <span>Baru</span>
+                            <strong>{{ $updaterStatus['pending_summary']['added'] }}</strong>
+                        </div>
+                        <div class="smart-kpi">
+                            <span>Diubah</span>
+                            <strong>{{ $updaterStatus['pending_summary']['modified'] }}</strong>
+                        </div>
+                        <div class="smart-kpi">
+                            <span>Dihapus/Rename</span>
+                            <strong>{{ $updaterStatus['pending_summary']['removed'] + $updaterStatus['pending_summary']['renamed'] }}</strong>
+                        </div>
+                    </div>
+                </div>
+
+                @if ($updaterStatus['is_up_to_date'])
+                    <div class="smart-empty">
+                        Tidak ada perubahan baru. Sistem Anda sudah sinkron dengan update terbaru.
+                    </div>
+                @elseif (!empty($updaterStatus['pending_changes']))
+                    <div class="table-responsive">
+                        <table class="table align-middle table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Status</th>
+                                    <th>File</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($updaterStatus['pending_changes'] as $change)
+                                    <tr>
+                                        <td class="text-nowrap">
+                                            @if ($change['status'] === 'added')
+                                                <span class="badge bg-success">Baru</span>
+                                            @elseif ($change['status'] === 'removed')
+                                                <span class="badge bg-danger">Dihapus</span>
+                                            @elseif ($change['status'] === 'renamed')
+                                                <span class="badge bg-info text-dark">Rename</span>
+                                            @else
+                                                <span class="badge bg-warning text-dark">Diubah</span>
+                                            @endif
+                                        </td>
+                                        <td><code>{{ $change['path'] }}</code></td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @else
+                    <div class="smart-empty">
+                        Belum ada data perubahan yang bisa ditampilkan.
+                    </div>
+                @endif
+
+                @if (!empty($updaterStatus['last_sync']['sample_changed_files']))
+                    <div class="mt-4">
+                        <h6 class="mb-3">File yang berubah pada sync terakhir</h6>
+                        <div class="row">
+                            @foreach ($updaterStatus['last_sync']['sample_changed_files'] as $file)
+                                <div class="col-12 col-lg-6 mb-2">
+                                    <code>{{ $file }}</code>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             </div>
-        </div>
-    @endif
-
-    <div class="smart-panel-card mt-4 p-4">
-        <h5 class="mb-3">Maintenance Tools</h5>
-        <p class="text-muted">Shortcut admin untuk operasi ringan yang dipakai saat deployment atau sesudah update.</p>
-
-        <div class="toolbar-actions">
-            <a class="btn btn-primary" href="{{ route('generate') }}">Generate Storage Link</a>
-            <a class="btn btn-outline-secondary" href="{{ route('cache.clear') }}">Clear Optimize Cache</a>
-            <a class="btn btn-outline-info" href="{{ route('admin.settings') }}">Open Server Settings</a>
         </div>
     </div>
 </x-layout-dashboard>

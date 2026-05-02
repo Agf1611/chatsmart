@@ -24,6 +24,7 @@ class SaveAutoreplyRequest extends FormRequest
             'name' => ['required', 'string', 'max:191'],
             'device_id' => ['required', 'exists:devices,id'],
             'contact_tag_id' => ['nullable', 'integer', 'exists:tags,id'],
+            'transport_policy' => ['required', 'in:interactive_preferred,text_fallback'],
             'trigger_event' => ['required', 'in:keyword,first_chat'],
             'keyword' => [
                 'nullable',
@@ -174,6 +175,7 @@ class SaveAutoreplyRequest extends FormRequest
             'is_quoted' => $this->boolean('is_quoted'),
             'priority' => $this->input('priority', 100),
             'contact_tag_id' => $this->filled('contact_tag_id') ? (int) $this->input('contact_tag_id') : null,
+            'transport_policy' => $this->input('transport_policy', 'text_fallback'),
             'trigger_event' => $triggerEvent,
             'keyword' => $triggerEvent === 'keyword'
                 ? $keyword

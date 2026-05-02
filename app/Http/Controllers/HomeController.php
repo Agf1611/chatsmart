@@ -2,6 +2,7 @@
 
 
 namespace App\Http\Controllers;
+use App\Services\OperationalHealthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Session;
@@ -10,7 +11,7 @@ class HomeController extends Controller
 {
     
 
-    public function index(Request $request){
+    public function index(Request $request, OperationalHealthService $healthService){
         $numbers = $request->user()->devices()->latest()->paginate(15);
       
        
@@ -27,7 +28,14 @@ class HomeController extends Controller
 
         $user['expired_subscription_status'] = $user->expiredSubscription;
         $user['subscription_status'] = $user->isExpiredSubscription ? 'Expired' : $user->active_subscription;
-        return view('home',compact('numbers','user'));
+        $selectedDevice = null;
+        if (session()->has('selectedDevice')) {
+            $selectedDevice = $request->user()->devices()->find(session()->get('selectedDevice')['device_id']);
+        }
+
+        $operational = $healthService->buildDashboardSummary($request->user(), $selectedDevice);
+
+        return view('home',compact('numbers','user', 'operational'));
     }
 
     public function store(Request $request){

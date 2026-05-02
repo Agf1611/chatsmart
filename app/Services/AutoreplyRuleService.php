@@ -190,6 +190,7 @@ class AutoreplyRuleService
             'name' => $validated['name'],
             'device_id' => $validated['device_id'],
             'contact_tag_id' => $validated['contact_tag_id'] ?? null,
+            'transport_policy' => $validated['transport_policy'] ?? 'text_fallback',
             'ai_bot_id' => isset($validated['ai_bot_id']) ? $validated['ai_bot_id'] : null,
             'trigger_event' => $validated['trigger_event'],
             'keyword' => $validated['keyword'],
@@ -219,6 +220,7 @@ class AutoreplyRuleService
                 'type_keyword' => 'Equal',
                 'reply_when' => 'All',
                 'contact_tag_id' => null,
+                'transport_policy' => 'text_fallback',
                 'type' => '',
                 'ai_bot_id' => null,
                 'status' => 'active',
@@ -240,6 +242,7 @@ class AutoreplyRuleService
             'type_keyword' => $autoreply->type_keyword,
             'reply_when' => $autoreply->reply_when,
             'contact_tag_id' => $autoreply->contact_tag_id,
+            'transport_policy' => $autoreply->transport_policy ?: $this->defaultTransportPolicyForType($autoreply->type),
             'type' => $autoreply->type,
             'ai_bot_id' => $autoreply->ai_bot_id,
             'status' => $autoreply->status,
@@ -480,6 +483,7 @@ class AutoreplyRuleService
                 'type_keyword' => $rule->type_keyword,
                 'reply_when' => $rule->reply_when,
                 'contact_tag_id' => $rule->contact_tag_id,
+                'transport_policy' => $rule->transport_policy ?: $this->defaultTransportPolicyForType($rule->type),
                 'type' => $rule->type,
                 'reply' => is_array($rule->reply) ? $rule->reply : json_decode($rule->reply, true),
                 'status' => strtolower($rule->status),
@@ -502,6 +506,7 @@ class AutoreplyRuleService
             'type_keyword' => isset($rule['type_keyword']) ? $rule['type_keyword'] : 'Equal',
             'reply_when' => isset($rule['reply_when']) ? $rule['reply_when'] : 'All',
             'contact_tag_id' => isset($rule['contact_tag_id']) ? $rule['contact_tag_id'] : null,
+            'transport_policy' => isset($rule['transport_policy']) ? $rule['transport_policy'] : $this->defaultTransportPolicyForType(isset($rule['type']) ? $rule['type'] : 'text'),
             'type' => isset($rule['type']) ? $rule['type'] : 'text',
             'reply' => isset($rule['reply']) ? $rule['reply'] : [],
             'status' => isset($rule['status']) ? strtolower($rule['status']) : 'active',
@@ -584,5 +589,10 @@ class AutoreplyRuleService
         }
 
         return $currentTime >= substr($start, 0, 5) || $currentTime <= substr($end, 0, 5);
+    }
+
+    protected function defaultTransportPolicyForType(string $type): string
+    {
+        return $type === 'list' ? 'interactive_preferred' : 'text_fallback';
     }
 }

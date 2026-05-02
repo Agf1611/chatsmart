@@ -23,6 +23,15 @@
             </div>
         @endif
 
+        @if (!empty($operational['alerts']))
+            @foreach ($operational['alerts'] as $alert)
+                <div class="alert alert-{{ $alert['level'] }} surface-card mb-0">
+                    <strong>{{ $alert['title'] }}</strong>
+                    <div class="small mt-1">{{ $alert['message'] }}</div>
+                </div>
+            @endforeach
+        @endif
+
         <section class="surface-card dashboard-welcome-card">
             <button type="button" class="welcome-dismiss" data-dismiss-welcome>
                 <i class="bi bi-x-lg"></i>
@@ -108,6 +117,76 @@
                             <h3 class="stats-card__value">{{ $user->message_histories_count }}</h3>
                             <p class="stats-card__subtext">{{ __('system.from_message_histories') }}</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="row g-4 row-cols-1 row-cols-md-2 row-cols-xl-4">
+            @foreach ($operational['health'] as $healthCard)
+                <div class="col">
+                    <div class="surface-card stats-card h-100">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                            <div>
+                                <p class="stats-card__eyebrow">{{ $healthCard['label'] }}</p>
+                                <h3 class="stats-card__value text-capitalize">{{ $healthCard['status'] }}</h3>
+                                <p class="stats-card__subtext mb-0">{{ $healthCard['message'] }}</p>
+                            </div>
+                            <span class="badge {{ $healthCard['badge_class'] }}">{{ ucfirst($healthCard['status']) }}</span>
+                        </div>
+                    </div>
+                </div>
+            @endforeach
+        </section>
+
+        <section class="surface-card">
+            <div class="account-shell__header">
+                <div>
+                    <p class="section-kicker">Operational Snapshot</p>
+                    <h3 class="section-title">Ringkasan operasional hari ini</h3>
+                    <div class="section-line"></div>
+                </div>
+                @if (auth()->user()->level === 'admin')
+                    <a href="{{ route('admin.operational-audit') }}" class="btn btn-outline-primary chatsmart-btn">
+                        <i class="bi bi-clipboard-data"></i> Audit Operasional
+                    </a>
+                @endif
+            </div>
+            <div class="row g-3">
+                <div class="col-md-4 col-xl-2">
+                    <div class="border rounded-3 p-3 h-100">
+                        <div class="small text-muted">Chat aktif hari ini</div>
+                        <div class="fs-4 fw-semibold">{{ $operational['metrics']['incoming_active_chats_today'] }}</div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-xl-2">
+                    <div class="border rounded-3 p-3 h-100">
+                        <div class="small text-muted">Pesan incoming tercatat</div>
+                        <div class="fs-4 fw-semibold">{{ $operational['metrics']['incoming_messages_tracked_today'] }}</div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-xl-2">
+                    <div class="border rounded-3 p-3 h-100">
+                        <div class="small text-muted">Auto reply sukses</div>
+                        <div class="fs-4 fw-semibold text-success">{{ $operational['metrics']['auto_reply_success_today'] }}</div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-xl-2">
+                    <div class="border rounded-3 p-3 h-100">
+                        <div class="small text-muted">Auto reply gagal</div>
+                        <div class="fs-4 fw-semibold text-danger">{{ $operational['metrics']['auto_reply_failed_today'] }}</div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-xl-2">
+                    <div class="border rounded-3 p-3 h-100">
+                        <div class="small text-muted">AI fallback / event</div>
+                        <div class="fs-4 fw-semibold text-warning">{{ $operational['metrics']['ai_fallback_today'] }}</div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-xl-2">
+                    <div class="border rounded-3 p-3 h-100">
+                        <div class="small text-muted">Chat dipause</div>
+                        <div class="fs-4 fw-semibold">{{ $operational['metrics']['paused_conversations'] }}</div>
                     </div>
                 </div>
             </div>

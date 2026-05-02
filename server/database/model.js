@@ -245,6 +245,56 @@ async function pauseContactForOperator(deviceBody, chatJid, senderNumber, contac
   return true;
 }
 
+async function resumeContactPause(deviceBody, chatJid) {
+  await dbQuery(
+    `UPDATE ai_conversations
+     INNER JOIN devices ON devices.id = ai_conversations.device_id
+     SET ai_conversations.status = 'active',
+         ai_conversations.paused_until = NULL,
+         ai_conversations.paused_reason = NULL,
+         ai_conversations.updated_at = NOW()
+     WHERE devices.body = ?
+       AND ai_conversations.chat_jid = ?`,
+    [deviceBody, chatJid]
+  );
+
+  return true;
+}
+
+async function saveAutoReplyHistory(deviceBody, number, type, message, payload, status = "success", note = null) {
+  await dbQuery(
+    `INSERT INTO message_histories (
+        user_id,
+        device_id,
+        number,
+        type,
+        message,
+        payload,
+        status,
+        send_by,
+        note,
+        created_at,
+        updated_at
+     )
+     SELECT
+        devices.user_id,
+        devices.id,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        'api',
+        ?,
+        NOW(),
+        NOW()
+     FROM devices
+     WHERE devices.body = ?
+     LIMIT 1`,
+    [number, type, message, payload, status, note, deviceBody]
+  );
+}
+
 module.exports = {
   isExistsEqualCommand,
   isExistsContainCommand,
@@ -255,4 +305,6 @@ module.exports = {
   getRegisteredPhonebookIdsForNumber,
   isContactPaused,
   pauseContactForOperator,
+  resumeContactPause,
+  saveAutoReplyHistory,
 };

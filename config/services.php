@@ -31,9 +31,10 @@ return [
     ],
 
     'github_updater' => [
-        'repo_url' => env('GITHUB_UPDATER_REPO_URL', 'https://github.com/Agf1611/wagt.git'),
+        'repo_url' => env('GITHUB_UPDATER_REPO_URL', 'https://github.com/Agf1611/chatsmart.git'),
         'branch' => env('GITHUB_UPDATER_BRANCH', 'main'),
         'token' => env('GITHUB_UPDATER_TOKEN'),
+        'mirror_path' => env('GITHUB_UPDATER_MIRROR_PATH', 'chatsmart'),
         'exclude_paths' => array_filter(array_map('trim', explode(',', (string) env(
             'GITHUB_UPDATER_EXCLUDE_PATHS',
             '.env,storage/,bootstrap/cache/,vendor/,node_modules/,credentials/,public/storage/,database/database.sqlite'

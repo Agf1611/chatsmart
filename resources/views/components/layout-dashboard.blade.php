@@ -2,6 +2,11 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
 <head>
+    @php
+        $chatsmartThemeVersion = @filemtime(public_path('assets/css/chatsmart-theme.css')) ?: time();
+        $dashboardIndexVersion = @filemtime(public_path('assets/js/index.js')) ?: time();
+        $dashboardThemeJsVersion = @filemtime(public_path('assets/js/chatsmart-theme.js')) ?: time();
+    @endphp
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="{{ asset('assets/images/favicon.png') }}" type="image/png" />
@@ -31,7 +36,7 @@
     <link href="{{ asset('assets/css/semi-dark.css') }}" rel="stylesheet" />
     <link href="{{ asset('assets/css/header-colors.css') }}" rel="stylesheet" />
     <link href="{{ asset('assets/css/pace.min.css') }}" rel="stylesheet" />
-    <link href="{{ asset('assets/css/chatsmart-theme.css') }}" rel="stylesheet" />
+    <link href="{{ asset('assets/css/chatsmart-theme.css') }}?v={{ $chatsmartThemeVersion }}" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.9.1/font/bootstrap-icons.css">
@@ -57,8 +62,8 @@
     <script src="{{ asset('assets/plugins/metismenu/js/metisMenu.min.js') }}"></script>
     <script src="{{ asset('assets/js/pace.min.js') }}"></script>
     <script src="{{ asset('assets/js/app.js') }}"></script>
-    <script src="{{ asset('assets/js/index.js') }}"></script>
-    <script src="{{ asset('assets/js/chatsmart-theme.js') }}"></script>
+    <script src="{{ asset('assets/js/index.js') }}?v={{ $dashboardIndexVersion }}"></script>
+    <script src="{{ asset('assets/js/chatsmart-theme.js') }}?v={{ $dashboardThemeJsVersion }}"></script>
     <script src="{{ asset('assets/plugins/smart-wizard/js/jquery.smartWizard.min.js') }}"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/js/toastr.min.js"></script>
     <link href="{{ asset('assets/plugins/smart-wizard/css/smart_wizard_all.min.css') }}" rel="stylesheet"

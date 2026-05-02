@@ -15,6 +15,11 @@ class Autoreply extends Model
         'is_quoted' => 'boolean',
     ];
 
+    public const TRANSPORT_POLICIES = [
+        'interactive_preferred' => 'Interactive preferred',
+        'text_fallback' => 'Text fallback',
+    ];
+
 
     public function user(){
         return $this->belongsTo(User::class);

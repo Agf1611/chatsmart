@@ -219,6 +219,23 @@
                                     @endforeach
                                 </select>
                             </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Transport Policy</label>
+                                <select name="transport_policy" id="autoreply-transport-policy" class="form-select">
+                                    @foreach ($transportPolicies as $value => $label)
+                                        <option value="{{ $value }}" {{ ($formData['transport_policy'] ?? 'text_fallback') === $value ? 'selected' : '' }}>
+                                            {{ $label }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <div class="alert border-0 bg-light-warning mb-0">
+                                    <strong>Catatan kompatibilitas:</strong> gunakan <strong>Interactive preferred</strong> untuk
+                                    welcome/menu yang memang ingin tampil sebagai list. Gunakan <strong>Text fallback</strong>
+                                    bila isi rule harus tetap aman muncul di WhatsApp HP walau payload interaktif tidak tersinkron.
+                                </div>
+                            </div>
                         </div>
 
                         <div class="autoreply-type-panel mt-4" data-type-panel="text">
@@ -473,6 +490,10 @@
                         <div id="simulate-result" class="alert border-0 bg-light-info d-none"></div>
                         <div class="smart-preview-panel" id="autoreply-preview-panel">
                             {!! $initialPreviewHtml !!}
+                        </div>
+                        <div class="alert border-0 bg-light-warning mt-3 mb-0 small">
+                            Preview menunjukkan format ideal. Saat runtime, sistem bisa menurunkan pesan interaktif menjadi teks
+                            sesuai <strong>Transport Policy</strong> dan jenis tujuan chat untuk menjaga sinkronisasi ke WhatsApp HP.
                         </div>
                     </div>
                 </div>
