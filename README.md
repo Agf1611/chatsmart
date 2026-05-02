@@ -95,3 +95,7 @@ php artisan storage:link
 - Zip rilis hosting ada di folder `dist/`.
 
 Panduan lebih rinci tersedia di [DEPLOY-HOSTING.md](DEPLOY-HOSTING.md).
+
+Jika deploy memakai cPanel Aren Host atau hosting serupa yang memisahkan web Laravel dan Node app, ikuti panduan khusus:
+
+- [CPANEL-ARENHOST-SETUP.md](CPANEL-ARENHOST-SETUP.md)

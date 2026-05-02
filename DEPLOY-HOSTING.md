@@ -6,6 +6,10 @@ Untuk rilis, instalasi baru, dan update lanjutan, gunakan source dari folder:
 
 `C:\xampp\htdocs\whastapp\chatsmart`
 
+Jika deploy memakai cPanel Aren Host atau hosting yang memisahkan Laravel web dan Node app, baca juga:
+
+- [CPANEL-ARENHOST-SETUP.md](CPANEL-ARENHOST-SETUP.md)
+
 Jika pengembangan masih dilakukan di folder induk `whastapp`, sinkronkan dulu perubahan terbaru ke folder `chatsmart` memakai:
 
 ```powershell
@@ -46,6 +50,7 @@ php artisan storage:link
 - Startup file Node: `server.js`
 - Node version: `18+`
 - Document root web: `public/` jika hosting mendukung
+- Pakai subdomain terpisah untuk Node gateway
 
 ## Sesudah Install
 
