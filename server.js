@@ -18,20 +18,8 @@ const server = http.createServer(app);
  * SOCKET.IO
  */
 const { Server } = require("socket.io");
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || process.env.APP_URL || "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins.length ? allowedOrigins : true,
-    methods: ["GET", "POST"],
-  },
-});
-const isHosting = String(process.env.TYPE_SERVER || "").toLowerCase() === "hosting";
-const port = isHosting
-  ? process.env.PORT || process.env.PORT_NODE || 3100
-  : process.env.PORT_NODE || process.env.PORT || 3100;
+const io = new Server(server);
+const port = process.env.PORT || process.env.PORT_NODE || 3100;
 app.use((req, res, next) => {
   res.set("Cache-Control", "no-store");
   req.io = io;
@@ -68,13 +56,3 @@ io.on("connection", (socket) => {
   });
 });
 server.listen(port, console.log(`Server run and listening port: ${port}`));
-
-wa.restoreSessions(io)
-  .then((results) => {
-    if (results.length > 0) {
-      console.log("Restored sessions:", results);
-    }
-  })
-  .catch((error) => {
-    console.log("Failed restoring sessions", error.message);
-  });
