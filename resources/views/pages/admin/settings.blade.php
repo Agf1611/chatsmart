@@ -96,6 +96,11 @@
                                                 value="{{ env('WA_URL_SERVER') }}" name="urlnode"
                                                 id="settingsInputUserName" aria-describedby="settingsInputUserName-add">
                                         </div>
+                                        <small class="text-muted d-block mt-2">
+                                            Untuk Cloudflare Tunnel, isi URL publik penuh seperti
+                                            <code>https://node.domainkamu.com</code> tanpa menambahkan port lokal
+                                            <code>:3100</code>.
+                                        </small>
                                     </div>
 
                                 </div>

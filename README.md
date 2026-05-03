@@ -63,6 +63,14 @@ powershell -ExecutionPolicy Bypass -File tools\stop-chatsmart-sync-watcher.ps1
 ```bash
 npm ci --omit=dev
 ```
+
+## Cloudflare Tunnel
+
+- Cloudflare Tunnel cocok untuk aplikasi ini jika web Laravel dan runtime Node dipublikasikan sebagai hostname terpisah.
+- Contoh:
+  - `https://app.domainkamu.com` -> `http://127.0.0.1:80` atau service web lokal
+  - `https://node.domainkamu.com` -> `http://127.0.0.1:3100`
+- Untuk `WA_URL_SERVER`, gunakan URL publik tunnel Node seperti `https://node.domainkamu.com` tanpa menambahkan port lokal `:3100`.
 - Jalankan Node app dengan startup file `server.js`.
 - Aplikasi sudah mendukung environment `PORT` dari hosting.
 

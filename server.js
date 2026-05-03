@@ -13,15 +13,32 @@ const express = require("express");
 const app = express();
 const http = require("http");
 const server = http.createServer(app);
+app.set("trust proxy", true);
 
 /**
  * SOCKET.IO
  */
 const { Server } = require("socket.io");
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || process.env.APP_URL || "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const allowedOrigins = Array.from(
+  new Set(
+    [
+      process.env.CORS_ALLOWED_ORIGINS || "",
+      process.env.APP_URL || "",
+      process.env.WA_URL_SERVER || "",
+    ]
+      .join(",")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+      .map((origin) => {
+        try {
+          return new URL(origin).origin;
+        } catch (error) {
+          return origin;
+        }
+      })
+  )
+);
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins.length ? allowedOrigins : true,

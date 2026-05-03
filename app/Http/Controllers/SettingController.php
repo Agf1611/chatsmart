@@ -70,10 +70,10 @@ class SettingController extends Controller
         ]);
         $urlnode =
             $request->typeServer === 'other'
-            ? $request->urlnode . ':' . $request->portnode
+            ? rtrim((string) $request->urlnode, '/')
             : ($request->typeServer === 'hosting'
                 ? url('/')
-                : 'http://localhost:' . $request->portnode);
+                : 'http://127.0.0.1:' . $request->portnode);
         setEnv('TYPE_SERVER', $request->typeServer);
         setEnv('PORT_NODE', $request->portnode);
         setEnv('WA_URL_SERVER', $urlnode);
