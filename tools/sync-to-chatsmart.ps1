@@ -77,6 +77,48 @@ if ($excludeFiles.Count -gt 0) {
     $roboArgs += $excludeFiles
 }
 
+function Remove-TargetPathIfExists {
+    param(
+        [string]$Path
+    )
+
+    if (Test-Path -LiteralPath $Path) {
+        Remove-Item -LiteralPath $Path -Recurse -Force
+    }
+}
+
+function Clear-DirectoryContentsExceptGitignore {
+    param(
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    Get-ChildItem -LiteralPath $Path -Force | Where-Object { $_.Name -ne '.gitignore' } | ForEach-Object {
+        Remove-Item -LiteralPath $_.FullName -Recurse -Force
+    }
+}
+
+function Ensure-GitignorePlaceholder {
+    param(
+        [string]$DirectoryPath
+    )
+
+    if (-not (Test-Path -LiteralPath $DirectoryPath)) {
+        New-Item -ItemType Directory -Path $DirectoryPath -Force | Out-Null
+    }
+
+    $gitignorePath = Join-Path $DirectoryPath '.gitignore'
+    if (-not (Test-Path -LiteralPath $gitignorePath)) {
+        Set-Content -LiteralPath $gitignorePath -Value @(
+            '*'
+            '!.gitignore'
+        )
+    }
+}
+
 Write-Host "Sinkronisasi source ke chatsmart..."
 Write-Host "Source : $sourceFull"
 Write-Host "Target : $targetFull"
@@ -86,6 +128,58 @@ Write-Host "Target : $targetFull"
 $exitCode = $LASTEXITCODE
 if ($exitCode -ge 8) {
     throw "Robocopy gagal dengan exit code $exitCode"
+}
+
+$targetCleanupDirs = @(
+    (Join-Path $targetFull 'vendor'),
+    (Join-Path $targetFull 'node_modules'),
+    (Join-Path $targetFull 'dist'),
+    (Join-Path $targetFull 'tmp')
+)
+
+foreach ($cleanupDir in $targetCleanupDirs) {
+    Remove-TargetPathIfExists -Path $cleanupDir
+}
+
+$targetRuntimeDirs = @(
+    (Join-Path $targetFull 'credentials'),
+    (Join-Path $targetFull 'storage\logs'),
+    (Join-Path $targetFull 'storage\framework\cache\data'),
+    (Join-Path $targetFull 'storage\framework\sessions'),
+    (Join-Path $targetFull 'storage\framework\testing'),
+    (Join-Path $targetFull 'storage\framework\views'),
+    (Join-Path $targetFull 'storage\app\backups'),
+    (Join-Path $targetFull 'storage\app\file-manager'),
+    (Join-Path $targetFull 'storage\app\files'),
+    (Join-Path $targetFull 'storage\app\public'),
+    (Join-Path $targetFull 'storage\app\temp'),
+    (Join-Path $targetFull 'storage\app\wachecker')
+)
+
+foreach ($runtimeDir in $targetRuntimeDirs) {
+    Clear-DirectoryContentsExceptGitignore -Path $runtimeDir
+}
+
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'credentials')
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'storage\logs')
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'storage\framework\cache\data')
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'storage\framework\sessions')
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'storage\framework\testing')
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'storage\framework\views')
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'storage\app\backups')
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'storage\app\file-manager')
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'storage\app\files')
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'storage\app\public')
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'storage\app\temp')
+Ensure-GitignorePlaceholder -DirectoryPath (Join-Path $targetFull 'storage\app\wachecker')
+
+Get-ChildItem -LiteralPath $targetFull -Recurse -Force -File -Filter '.DS_Store' | ForEach-Object {
+    Remove-Item -LiteralPath $_.FullName -Force
+}
+
+$targetGitPath = Join-Path $targetFull '.git'
+if (Test-Path -LiteralPath $targetGitPath) {
+    git -C $targetFull clean -fdX | Out-Host
 }
 
 Write-Host "Selesai. Exit code robocopy: $exitCode"
