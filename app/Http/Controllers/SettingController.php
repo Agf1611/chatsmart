@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class SettingController extends Controller
 {
@@ -278,17 +279,32 @@ class SettingController extends Controller
             }
 
             /** CREATE ADMIN USER STARTS **/
-            $user = User::firstOrNew([
-                'email' => $request->input('admin.email'),
-            ]);
-            $user->username = $request->input('admin.username');
-            $user->password = Hash::make($request->input('admin.password'));
-            $user->email_verified_at = now();
-            $user->level = 'admin';
-            $user->active_subscription = 'lifetime';
-            $user->limit_device = 10;
-            $user->chunk_blast = 0;
-            $user->save();
+            try {
+                $user = User::firstOrNew([
+                    'email' => $request->input('admin.email'),
+                ]);
+                $user->username = $request->input('admin.username');
+                $user->password = Hash::make($request->input('admin.password'));
+                $user->email_verified_at = now();
+                $user->level = 'admin';
+                $user->active_subscription = 'lifetime';
+                $user->limit_device = 10;
+                $user->chunk_blast = 0;
+                $user->api_key = $user->api_key ?: Str::random(32);
+                $user->save();
+            } catch (\Throwable $th) {
+                Log::error('Admin user creation failed', [
+                    'message' => $th->getMessage(),
+                ]);
+
+                $validator = Validator::make([], [])
+                    ->errors()
+                    ->add('Installer', 'Gagal membuat akun admin: ' . $th->getMessage());
+
+                return back()
+                    ->withErrors($validator)
+                    ->withInput();
+            }
             /** CREATE ADMIN USER END **/
 
             if (!setEnv('APP_INSTALLED', 'true')) {
