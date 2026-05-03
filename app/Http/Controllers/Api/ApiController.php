@@ -245,7 +245,7 @@ class ApiController extends Controller
         }
         if ($device->status == 'Connected')  return $this->sendFailResponse('Device already connected!');
         try {
-            $post = Http::withOptions(['verify' => false])->asForm()->post(env('WA_URL_SERVER') . '/backend-generate-qr', ['token' => $request->device,]);
+            $post = Http::withOptions(['verify' => false])->asForm()->post(getNodeRuntimeInternalUrl() . '/backend-generate-qr', ['token' => $request->device,]);
         } catch (\Throwable $th) {
             return $this->sendFailResponse(self::RESPON_FAILED);
         }

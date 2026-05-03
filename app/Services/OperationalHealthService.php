@@ -221,7 +221,7 @@ class OperationalHealthService
 
     protected function checkNodeRuntime(int $connectedDevices = 0): array
     {
-        $baseUrl = rtrim((string) env('WA_URL_SERVER', ''), '/');
+        $baseUrl = getNodeRuntimeInternalUrl();
         if ($baseUrl === '') {
             return $this->statusCard('Node WA Runtime', 'critical', 'WA_URL_SERVER belum diatur.');
         }

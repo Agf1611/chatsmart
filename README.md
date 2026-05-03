@@ -71,6 +71,9 @@ npm ci --omit=dev
   - `https://app.domainkamu.com` -> `http://127.0.0.1:80` atau service web lokal
   - `https://node.domainkamu.com` -> `http://127.0.0.1:3100`
 - Untuk `WA_URL_SERVER`, gunakan URL publik tunnel Node seperti `https://node.domainkamu.com` tanpa menambahkan port lokal `:3100`.
+- Untuk setup yang lebih stabil, pisahkan:
+  - `WA_URL_SERVER_PUBLIC=https://node.domainkamu.com`
+  - `WA_URL_SERVER_INTERNAL=http://127.0.0.1:3100`
 - Jalankan Node app dengan startup file `server.js`.
 - Aplikasi sudah mendukung environment `PORT` dari hosting.
 

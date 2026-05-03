@@ -98,14 +98,11 @@
         const currentHost = window.location.hostname;
         const configuredNodeUrl = (socketRuntime.nodeUrl || '').replace(/\/+$/, '');
         const localNodeUrl = (socketRuntime.localNodeUrl || '').replace(/\/+$/, '');
-        const isPrivateHost = /^(localhost|127\.0\.0\.1)$/i.test(currentHost)
-            || /^192\.168\./.test(currentHost)
-            || /^10\./.test(currentHost)
-            || /^172\.(1[6-9]|2\d|3[0-1])\./.test(currentHost);
+        const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(currentHost);
         const useCurrentOrigin = !configuredNodeUrl || socketRuntime.serverType === 'hosting';
         const socketEndpoint = useCurrentOrigin
             ? currentOrigin
-            : (isPrivateHost ? localNodeUrl : configuredNodeUrl);
+            : (isLocalHost ? localNodeUrl : configuredNodeUrl);
 
         const socket = io(socketEndpoint, {
             path: '/socket.io',

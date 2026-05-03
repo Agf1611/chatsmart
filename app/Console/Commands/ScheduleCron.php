@@ -45,7 +45,7 @@ class ScheduleCron extends Command
       $numbers = Device::whereStatus('Connected')->get();
      
     try {
-      $url = env('WA_URL_SERVER').'/backend-initialize';
+      $url = getNodeRuntimeInternalUrl().'/backend-initialize';
       Log::info('Auto connect whatsapp running');
       foreach ($numbers as $n) {
 

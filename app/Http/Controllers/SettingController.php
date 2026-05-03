@@ -68,15 +68,18 @@ class SettingController extends Controller
             'portnode' => ['required'],
             'urlnode' => ['required_if:typeServer,other', 'nullable', 'url'],
         ]);
-        $urlnode =
+        $publicNodeUrl =
             $request->typeServer === 'other'
             ? rtrim((string) $request->urlnode, '/')
             : ($request->typeServer === 'hosting'
                 ? url('/')
                 : 'http://127.0.0.1:' . $request->portnode);
+        $internalNodeUrl = 'http://127.0.0.1:' . $request->portnode;
         setEnv('TYPE_SERVER', $request->typeServer);
         setEnv('PORT_NODE', $request->portnode);
-        setEnv('WA_URL_SERVER', $urlnode);
+        setEnv('WA_URL_SERVER', $publicNodeUrl);
+        setEnv('WA_URL_SERVER_PUBLIC', $publicNodeUrl);
+        setEnv('WA_URL_SERVER_INTERNAL', $internalNodeUrl);
         return back()->with('alert', [
             'type' => 'success',
             'msg' => 'Success Update configuration!',

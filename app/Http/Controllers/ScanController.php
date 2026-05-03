@@ -10,10 +10,10 @@ class ScanController extends Controller
     {
         return [
             'serverType' => getEnvValue('TYPE_SERVER', (string) env('TYPE_SERVER', '')),
-            'nodeUrl' => rtrim((string) getEnvValue('WA_URL_SERVER', (string) env('WA_URL_SERVER', '')), '/'),
+            'nodeUrl' => getNodeRuntimePublicUrl(),
             'appUrl' => rtrim((string) config('app.url'), '/'),
             'portNode' => (string) getEnvValue('PORT_NODE', (string) env('PORT_NODE', '3100')),
-            'localNodeUrl' => 'http://127.0.0.1:' . getEnvValue('PORT_NODE', (string) env('PORT_NODE', '3100')),
+            'localNodeUrl' => getNodeRuntimeInternalUrl(),
         ];
     }
 

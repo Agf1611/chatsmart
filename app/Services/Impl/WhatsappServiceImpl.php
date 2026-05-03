@@ -26,7 +26,7 @@ class WhatsappServiceImpl implements WhatsappService
 
     public function __construct()
     {
-        $this->url = env('WA_URL_SERVER');
+        $this->url = getNodeRuntimeInternalUrl();
     }
 
     private function normalizeMediaUrl(?string $mediaUrl): ?string

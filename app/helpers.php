@@ -57,11 +57,27 @@ function clearCacheNode()
     try {
         Http::withOptions(['verify' => false])
             ->asForm()
-            ->post(env('WA_URL_SERVER') . '/backend-clearCache');
+            ->post(getNodeRuntimeInternalUrl() . '/backend-clearCache');
         return true;
     } catch (\Throwable $th) {
         return false;
     }
+}
+
+function getNodeRuntimePublicUrl(): string
+{
+    return rtrim((string) getEnvValue(
+        'WA_URL_SERVER_PUBLIC',
+        (string) getEnvValue('WA_URL_SERVER', (string) env('WA_URL_SERVER', ''))
+    ), '/');
+}
+
+function getNodeRuntimeInternalUrl(): string
+{
+    return rtrim((string) getEnvValue(
+        'WA_URL_SERVER_INTERNAL',
+        getNodeRuntimePublicUrl()
+    ), '/');
 }
 
 function writeFileAtomically(string $path, string $contents): bool
