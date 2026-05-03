@@ -291,6 +291,15 @@
                                         Untuk sekarang, cukup siapkan database dan user MySQL dari panel hosting dulu.
                                         Pastikan juga `.env`, `storage/app`, dan `bootstrap/cache` bisa ditulis oleh PHP di server.</p>
                                 </div>
+
+                                <div class="ui fluid blue message">
+                                    <div class="header mb-1">Auto Deteksi Server</div>
+                                    <p class="mb-0">Saat submit, installer akan otomatis mengisi konfigurasi dasar
+                                        server berdasarkan alamat instalasi saat ini. Jika dipasang di localhost/IP
+                                        lokal maka mode lokal akan dipakai. Jika dipasang di domain publik maka mode
+                                        hosting akan dipakai otomatis. Pengaturan ini tetap bisa diubah lagi dari menu
+                                        Admin jika nanti ingin memakai subdomain Node atau Cloudflare Tunnel.</p>
+                                </div>
                             </div>
 
                             <div class="step requirements" :class="{ active: stepIsActive(2) }">

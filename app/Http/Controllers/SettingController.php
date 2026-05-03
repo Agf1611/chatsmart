@@ -66,12 +66,14 @@ class SettingController extends Controller
         $request->validate([
             'typeServer' => ['required'],
             'portnode' => ['required'],
-            'urlnode' => ['required_if:typeServer,other,hosting', 'nullable', 'url'],
+            'urlnode' => ['required_if:typeServer,other', 'nullable', 'url'],
         ]);
         $normalizedNodeUrl = rtrim((string) $request->urlnode, '/');
-        $publicNodeUrl = in_array($request->typeServer, ['other', 'hosting'], true)
+        $publicNodeUrl = $request->typeServer === 'other'
             ? $normalizedNodeUrl
-            : 'http://127.0.0.1:' . $request->portnode;
+            : ($request->typeServer === 'hosting'
+                ? rtrim((string) url('/'), '/')
+                : 'http://127.0.0.1:' . $request->portnode);
         $internalNodeUrl = 'http://127.0.0.1:' . $request->portnode;
         setEnv('TYPE_SERVER', $request->typeServer);
         setEnv('PORT_NODE', $request->portnode);
@@ -233,16 +235,15 @@ class SettingController extends Controller
             }
             /** CREATE DATABASE CONNECTION ENDS **/
             try {
-                $urll = rtrim($request->root(), '/');
+                $serverDefaults = resolveInstallerServerDefaults($request);
                 $env = [
                     'DB_HOST' => $db_params['host'],
                     'DB_DATABASE' => $db_params['database'],
                     'DB_USERNAME' => $db_params['username'],
                     'DB_PASSWORD' => $db_params['password'] ?? '',
-                    'APP_URL' => $urll,
                     'APP_INSTALLED' => 'false',
-                    'WA_CREDENTIALS_PATH' => getNodeCredentialsBasePath(),
                 ];
+                $env = array_merge($env, $serverDefaults);
 
                 foreach ($env as $k => $v) {
                     if (!setEnv($k, $v)) {

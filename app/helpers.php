@@ -64,6 +64,79 @@ function clearCacheNode()
     }
 }
 
+function isLocalOrPrivateHost(string $host): bool
+{
+    $host = trim(strtolower($host), '[]');
+    if ($host === '') {
+        return false;
+    }
+
+    if (in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+        return true;
+    }
+
+    if (!filter_var($host, FILTER_VALIDATE_IP)) {
+        return str_ends_with($host, '.local');
+    }
+
+    return filter_var(
+        $host,
+        FILTER_VALIDATE_IP,
+        FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+    ) === false;
+}
+
+function normalizeUrlOrigin(?string $url): string
+{
+    $url = trim((string) $url);
+    if ($url === '') {
+        return '';
+    }
+
+    $parts = parse_url($url);
+    if (!$parts || empty($parts['scheme']) || empty($parts['host'])) {
+        return rtrim($url, '/');
+    }
+
+    $origin = $parts['scheme'] . '://' . $parts['host'];
+    if (!empty($parts['port'])) {
+        $origin .= ':' . $parts['port'];
+    }
+
+    return rtrim($origin, '/');
+}
+
+function resolveInstallerServerDefaults(\Illuminate\Http\Request $request, $defaultPort = 3100): array
+{
+    $port = (string) $defaultPort;
+    $appUrl = rtrim((string) $request->root(), '/');
+    $host = (string) $request->getHost();
+    $isLocal = isLocalOrPrivateHost($host);
+    $serverType = $isLocal ? 'localhost' : 'hosting';
+    $publicNodeUrl = $isLocal ? 'http://127.0.0.1:' . $port : $appUrl;
+    $internalNodeUrl = 'http://127.0.0.1:' . $port;
+
+    $corsOrigins = array_values(array_unique(array_filter([
+        normalizeUrlOrigin($appUrl),
+        normalizeUrlOrigin($publicNodeUrl),
+        $isLocal ? 'http://localhost' : null,
+        $isLocal ? 'http://127.0.0.1' : null,
+    ])));
+
+    return [
+        'APP_URL' => $appUrl,
+        'TYPE_SERVER' => $serverType,
+        'PORT_NODE' => $port,
+        'WA_URL_SERVER' => $publicNodeUrl,
+        'WA_URL_SERVER_PUBLIC' => $publicNodeUrl,
+        'WA_URL_SERVER_INTERNAL' => $internalNodeUrl,
+        'CORS_ALLOWED_ORIGINS' => implode(',', $corsOrigins),
+        'ORIGIN' => normalizeUrlOrigin($appUrl),
+        'SESSION_SECURE_COOKIE' => $request->isSecure() ? 'true' : 'false',
+        'WA_CREDENTIALS_PATH' => getNodeCredentialsBasePath(),
+    ];
+}
+
 function generateAppKeyValue(): string
 {
     return 'base64:' . base64_encode(random_bytes(32));
