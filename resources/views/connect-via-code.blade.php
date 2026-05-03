@@ -92,15 +92,52 @@
     // if subscription not expired
     const is_expired_subscription = '{{ Auth::user()->is_expired_subscription }}';
     if (!is_expired_subscription) {
-        let socket;
-        let device = '{{ $number->body }}';
-        if ('{{ env('TYPE_SERVER') }}' === 'hosting') {
-            socket = io();
-        } else {
-            socket = io('{{ env('WA_URL_SERVER') }}', {
-                transports: ['websocket', 'polling', 'flashsocket']
-            });
-        }
+        const socketRuntime = @json($socketRuntime);
+        const device = '{{ $number->body }}';
+        const currentOrigin = window.location.origin;
+        const currentHost = window.location.hostname;
+        const configuredNodeUrl = (socketRuntime.nodeUrl || '').replace(/\/+$/, '');
+        const localNodeUrl = (socketRuntime.localNodeUrl || '').replace(/\/+$/, '');
+        const isPrivateHost = /^(localhost|127\.0\.0\.1)$/i.test(currentHost)
+            || /^192\.168\./.test(currentHost)
+            || /^10\./.test(currentHost)
+            || /^172\.(1[6-9]|2\d|3[0-1])\./.test(currentHost);
+        const useCurrentOrigin = !configuredNodeUrl || socketRuntime.serverType === 'hosting';
+        const socketEndpoint = useCurrentOrigin
+            ? currentOrigin
+            : (isPrivateHost ? localNodeUrl : configuredNodeUrl);
+
+        const socket = io(socketEndpoint, {
+            path: '/socket.io',
+            transports: ['polling', 'websocket'],
+            upgrade: true,
+            rememberUpgrade: false,
+            tryAllTransports: true,
+            timeout: 20000,
+            reconnection: true,
+            reconnectionAttempts: 5,
+        });
+
+        socket.on('connect', () => {
+            $('.statusss').html(`  <button class="btn btn-info" type="button" disabled>
+                                                    <span class="" role="status" aria-hidden="true"></span>
+                                                   Terhubung ke runtime Node, menunggu pairing code...
+                                                </button>`);
+        });
+
+        socket.on('connect_error', (error) => {
+            $('.statusss').html(`  <button class="btn btn-danger" type="button" disabled>
+                                                    <span class="" role="status" aria-hidden="true"></span>
+                                                   Gagal konek ke Node (${socketEndpoint}): ${error.message}
+                                                </button>`);
+        });
+
+        socket.on('disconnect', (reason) => {
+            $('.statusss').html(`  <button class="btn btn-warning" type="button" disabled>
+                                                    <span class="" role="status" aria-hidden="true"></span>
+                                                   Koneksi Node terputus: ${reason}
+                                                </button>`);
+        });
 
 
         socket.emit('ConnectViaCode', '{{ $number->body }}')

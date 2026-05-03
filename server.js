@@ -39,9 +39,37 @@ const allowedOrigins = Array.from(
       })
   )
 );
+const isPrivateOrigin = (origin) => {
+  try {
+    const { hostname } = new URL(origin);
+    return /^(localhost|127\.0\.0\.1)$/i.test(hostname)
+      || /^192\.168\./.test(hostname)
+      || /^10\./.test(hostname)
+      || /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname);
+  } catch (error) {
+    return false;
+  }
+};
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins.length ? allowedOrigins : true,
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      try {
+        const normalizedOrigin = new URL(origin).origin;
+        if (!allowedOrigins.length || allowedOrigins.includes(normalizedOrigin) || isPrivateOrigin(origin)) {
+          return callback(null, true);
+        }
+      } catch (error) {
+        if (isPrivateOrigin(origin)) {
+          return callback(null, true);
+        }
+      }
+
+      return callback(new Error("Origin not allowed by Socket.IO CORS"));
+    },
     methods: ["GET", "POST"],
   },
 });
