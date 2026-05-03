@@ -103,10 +103,9 @@
         const configuredNodeUrl = (socketRuntime.nodeUrl || '').replace(/\/+$/, '');
         const localNodeUrl = (socketRuntime.localNodeUrl || '').replace(/\/+$/, '');
         const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(currentHost);
-        const useCurrentOrigin = !configuredNodeUrl || socketRuntime.serverType === 'hosting';
-        const socketEndpoint = useCurrentOrigin
-            ? currentOrigin
-            : (isLocalHost ? localNodeUrl : configuredNodeUrl);
+        const socketEndpoint = isLocalHost
+            ? (localNodeUrl || configuredNodeUrl || currentOrigin)
+            : (configuredNodeUrl || currentOrigin);
 
         const socket = io(socketEndpoint, {
             path: '/socket.io',

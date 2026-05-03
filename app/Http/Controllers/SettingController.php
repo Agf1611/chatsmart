@@ -66,14 +66,12 @@ class SettingController extends Controller
         $request->validate([
             'typeServer' => ['required'],
             'portnode' => ['required'],
-            'urlnode' => ['required_if:typeServer,other', 'nullable', 'url'],
+            'urlnode' => ['required_if:typeServer,other,hosting', 'nullable', 'url'],
         ]);
-        $publicNodeUrl =
-            $request->typeServer === 'other'
-            ? rtrim((string) $request->urlnode, '/')
-            : ($request->typeServer === 'hosting'
-                ? url('/')
-                : 'http://127.0.0.1:' . $request->portnode);
+        $normalizedNodeUrl = rtrim((string) $request->urlnode, '/');
+        $publicNodeUrl = in_array($request->typeServer, ['other', 'hosting'], true)
+            ? $normalizedNodeUrl
+            : 'http://127.0.0.1:' . $request->portnode;
         $internalNodeUrl = 'http://127.0.0.1:' . $request->portnode;
         setEnv('TYPE_SERVER', $request->typeServer);
         setEnv('PORT_NODE', $request->portnode);
@@ -203,6 +201,9 @@ class SettingController extends Controller
 
             try {
                 ensureInstallerFilesystemReady();
+                if (!ensureEnvFileExists()) {
+                    throw new \RuntimeException('File .env belum ada dan gagal dibuat otomatis dari .env.example.');
+                }
             } catch (\RuntimeException $e) {
                 $validator = Validator::make([], [])
                     ->errors()
@@ -240,6 +241,7 @@ class SettingController extends Controller
                     'DB_PASSWORD' => $db_params['password'] ?? '',
                     'APP_URL' => $urll,
                     'APP_INSTALLED' => 'false',
+                    'WA_CREDENTIALS_PATH' => getNodeCredentialsBasePath(),
                 ];
 
                 foreach ($env as $k => $v) {
@@ -248,13 +250,7 @@ class SettingController extends Controller
                     }
                 }
 
-                if (!config('app.key') && !getEnvValue('APP_KEY')) {
-                    Artisan::call('key:generate', ['--force' => true]);
-
-                    if (!getEnvValue('APP_KEY')) {
-                        throw new \RuntimeException('APP_KEY gagal dibuat. Pastikan file .env bisa ditulis.');
-                    }
-                }
+                ensureAppKeyExists();
 
                 DB::purge('mysql');
                 DB::reconnect('mysql');

@@ -66,10 +66,10 @@ class HomeController extends Controller
                 return back()->with('alert',['type' => 'danger','msg' => 'Device not found!']);
              }
 
-             $device->delete();
+            $device->delete();
             Session::forget('selectedDevice');
             if (!empty($device->body)) {
-                $path = base_path('credentials/'.$device->body);
+                $path = getNodeCredentialPath($device->body);
                 if(file_exists($path)){
                     File::deleteDirectory($path);
                 }

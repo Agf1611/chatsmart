@@ -46,7 +46,7 @@ class CheckSubscription extends Command
            $numbers = Device::whereUserId($user->id)->whereStatus('Connected')->get();
               foreach ($numbers as $number) {
               // delete folder in credentials
-              $path = base_path('credentials/'.$number->body);
+              $path = getNodeCredentialPath($number->body);
               if(file_exists($path)){
                // delete all file from path
                 $files = glob($path.'/*'); // get all file names

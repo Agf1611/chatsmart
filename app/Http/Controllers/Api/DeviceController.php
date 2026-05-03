@@ -50,7 +50,7 @@ class DeviceController extends Controller
 
         try {
             if (!empty($device->body)) {
-                $path = base_path('credentials/' . $device->body);
+                $path = getNodeCredentialPath($device->body);
                 if (file_exists($path))  File::deleteDirectory($path);
             }
             $device->delete();

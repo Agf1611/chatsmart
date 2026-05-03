@@ -2,6 +2,7 @@ const { Boom } = require("@hapi/boom");
 const {
   default: makeWASocket,
   Browsers,
+  DEFAULT_CONNECTION_CONFIG,
   DisconnectReason,
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
@@ -27,9 +28,59 @@ const reconnectAfterAuthReset = {};
 
 const DEFAULT_PP =
   "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/1200px-WhatsApp.svg.png";
+const DEFAULT_WA_VERSION = Array.isArray(DEFAULT_CONNECTION_CONFIG?.version)
+  ? [...DEFAULT_CONNECTION_CONFIG.version]
+  : [2, 2329, 9];
+const CREDENTIALS_ROOT = path.resolve(
+  process.env.WA_CREDENTIALS_PATH || path.join(process.cwd(), "storage", "app", "wa-sessions")
+);
+
+function parseConfiguredWaVersion(rawVersion) {
+  if (!rawVersion) {
+    return null;
+  }
+
+  const parts = String(rawVersion)
+    .split(/[,\s.]+/)
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value) => Number.isInteger(value) && value >= 0);
+
+  return parts.length >= 3 ? parts.slice(0, 3) : null;
+}
+
+async function resolveWaVersion() {
+  const envVersion = parseConfiguredWaVersion(process.env.BAILEYS_VERSION);
+  if (envVersion) {
+    return {
+      version: envVersion,
+      isLatest: false,
+      source: "env",
+    };
+  }
+
+  const shouldFetchLatest = String(process.env.BAILEYS_FETCH_LATEST || "").toLowerCase() === "true";
+  if (shouldFetchLatest) {
+    try {
+      const result = await fetchLatestBaileysVersion({ timeout: 10000 });
+      return {
+        version: result.version,
+        isLatest: result.isLatest,
+        source: "remote",
+      };
+    } catch (error) {
+      console.log("Failed fetching latest Baileys version, using bundled version.", error.message);
+    }
+  }
+
+  return {
+    version: [...DEFAULT_WA_VERSION],
+    isLatest: false,
+    source: "bundled",
+  };
+}
 
 function getCredentialPath(token) {
-  return path.join(process.cwd(), "credentials", String(token));
+  return path.join(CREDENTIALS_ROOT, String(token));
 }
 
 function isSocketConnected(token) {
@@ -86,8 +137,10 @@ async function clearConnection(token, options = {}) {
 }
 
 async function createSocket(token, io, usePairingCode) {
-  const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log("using WA v", version.join("."), ", isLatest:", isLatest);
+  const { version, isLatest, source } = await resolveWaVersion();
+  console.log("using WA v", version.join("."), ", source:", source, ", isLatest:", isLatest);
+
+  fs.mkdirSync(CREDENTIALS_ROOT, { recursive: true });
 
   const { state, saveCreds } = await useMultiFileAuthState(getCredentialPath(token));
   const socket = makeWASocket({
@@ -579,13 +632,12 @@ async function initialize(req, res) {
 }
 
 async function restoreSessions(io = null) {
-  const credentialsRoot = path.join(process.cwd(), "credentials");
-  if (!fs.existsSync(credentialsRoot)) {
+  if (!fs.existsSync(CREDENTIALS_ROOT)) {
     return [];
   }
 
   const tokens = fs
-    .readdirSync(credentialsRoot, { withFileTypes: true })
+    .readdirSync(CREDENTIALS_ROOT, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .filter(Boolean);

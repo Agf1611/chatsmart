@@ -51,6 +51,7 @@ powershell -ExecutionPolicy Bypass -File tools\stop-chatsmart-sync-watcher.ps1
    - `AUTH`
    - `CORS_ALLOWED_ORIGINS`
 4. Pastikan `APP_INSTALLED=false` sebelum menjalankan installer pertama kali.
+5. Jika `APP_KEY` masih kosong, aplikasi sekarang akan membuatnya otomatis saat pertama kali dibuka atau saat installer dijalankan.
 
 ## Setup Web
 
@@ -74,6 +75,7 @@ npm ci --omit=dev
 - Untuk setup yang lebih stabil, pisahkan:
   - `WA_URL_SERVER_PUBLIC=https://node.domainkamu.com`
   - `WA_URL_SERVER_INTERNAL=http://127.0.0.1:3100`
+- Session WhatsApp sekarang default disimpan di `storage/app/wa-sessions`, jadi lebih aman untuk Linux hosting daripada folder root project.
 - Jalankan Node app dengan startup file `server.js`.
 - Aplikasi sudah mendukung environment `PORT` dari hosting.
 
@@ -86,6 +88,7 @@ composer install --no-dev --optimize-autoloader
 - Pastikan folder ini writable:
   - `storage/`
   - `bootstrap/cache/`
+- Folder session WhatsApp ikut memakai `storage/app/wa-sessions`, jadi permission `storage/` yang benar biasanya sudah cukup.
 - Buat ulang symlink storage:
 ```bash
 php artisan storage:link

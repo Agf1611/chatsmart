@@ -64,20 +64,83 @@ function clearCacheNode()
     }
 }
 
+function generateAppKeyValue(): string
+{
+    return 'base64:' . base64_encode(random_bytes(32));
+}
+
+function ensureEnvFileExists(): bool
+{
+    $envPath = base_path('.env');
+    if (file_exists($envPath)) {
+        return true;
+    }
+
+    $examplePath = base_path('.env.example');
+    if (file_exists($examplePath)) {
+        return writeFileAtomically($envPath, file_get_contents($examplePath) ?: '');
+    }
+
+    return writeFileAtomically($envPath, '');
+}
+
+function ensureAppKeyExists(): string
+{
+    $existingKey = getEnvValue('APP_KEY', (string) config('app.key'));
+    if (!empty($existingKey)) {
+        config(['app.key' => $existingKey]);
+
+        return $existingKey;
+    }
+
+    $generatedKey = generateAppKeyValue();
+    if (!setEnv('APP_KEY', $generatedKey)) {
+        throw new RuntimeException('APP_KEY gagal dibuat. Pastikan file .env bisa ditulis.');
+    }
+
+    config(['app.key' => $generatedKey]);
+
+    return $generatedKey;
+}
+
 function getNodeRuntimePublicUrl(): string
 {
-    return rtrim((string) getEnvValue(
-        'WA_URL_SERVER_PUBLIC',
-        (string) getEnvValue('WA_URL_SERVER', (string) env('WA_URL_SERVER', ''))
-    ), '/');
+    $publicUrl = trim((string) getEnvValue('WA_URL_SERVER_PUBLIC', ''));
+    if ($publicUrl === '') {
+        $publicUrl = trim((string) getEnvValue('WA_URL_SERVER', (string) env('WA_URL_SERVER', '')));
+    }
+
+    return rtrim($publicUrl, '/');
 }
 
 function getNodeRuntimeInternalUrl(): string
 {
-    return rtrim((string) getEnvValue(
-        'WA_URL_SERVER_INTERNAL',
-        getNodeRuntimePublicUrl()
-    ), '/');
+    $internalUrl = trim((string) getEnvValue('WA_URL_SERVER_INTERNAL', ''));
+    if ($internalUrl === '') {
+        $internalUrl = getNodeRuntimePublicUrl();
+    }
+
+    return rtrim($internalUrl, '/');
+}
+
+function getNodeCredentialsBasePath(): string
+{
+    $configuredPath = trim((string) getEnvValue('WA_CREDENTIALS_PATH', ''));
+    if ($configuredPath === '') {
+        $configuredPath = storage_path('app/wa-sessions');
+    }
+
+    return rtrim($configuredPath, DIRECTORY_SEPARATOR . '/\\');
+}
+
+function getNodeCredentialPath(?string $token = null): string
+{
+    $basePath = getNodeCredentialsBasePath();
+    if ($token === null || $token === '') {
+        return $basePath;
+    }
+
+    return $basePath . DIRECTORY_SEPARATOR . trim((string) $token, DIRECTORY_SEPARATOR . '/\\');
 }
 
 function writeFileAtomically(string $path, string $contents): bool
@@ -149,6 +212,11 @@ function getInstallerFilesystemStatus(): array
             'path' => base_path('bootstrap/cache'),
             'writable' => canWritePath(base_path('bootstrap/cache')),
         ],
+        [
+            'label' => 'storage/app/wa-sessions',
+            'path' => getNodeCredentialsBasePath(),
+            'writable' => canWritePath(getNodeCredentialsBasePath()),
+        ],
     ];
 }
 
@@ -174,6 +242,10 @@ function ensureInstallerFilesystemReady(): void
 function setEnv(string $key, ?string $value): bool
 {
     $path = base_path('.env');
+    if (!ensureEnvFileExists()) {
+        return false;
+    }
+
     $lines = file_exists($path) ? file($path, FILE_IGNORE_NEW_LINES) : [];
     $updated = false;
     $value = $value ?? '';

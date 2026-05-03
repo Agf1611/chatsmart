@@ -193,10 +193,11 @@ class OperationalHealthService
     protected function checkLaravel(): array
     {
         $storageWritable = is_writable(storage_path());
+        $credentialStorageWritable = canWritePath(getNodeCredentialsBasePath());
         $appKeyReady = !empty(config('app.key'));
 
-        if ($storageWritable && $appKeyReady) {
-            return $this->statusCard('Laravel Web', 'healthy', 'Aplikasi web aktif, APP_KEY tersedia, dan storage dapat ditulis.');
+        if ($storageWritable && $credentialStorageWritable && $appKeyReady) {
+            return $this->statusCard('Laravel Web', 'healthy', 'Aplikasi web aktif, APP_KEY tersedia, storage dapat ditulis, dan session WhatsApp punya lokasi simpan yang writable.');
         }
 
         return $this->statusCard(
@@ -204,6 +205,7 @@ class OperationalHealthService
             'warning',
             'Ada konfigurasi inti yang belum ideal: ' . implode(', ', array_filter([
                 $storageWritable ? null : 'storage tidak writable',
+                $credentialStorageWritable ? null : 'storage session WhatsApp tidak writable',
                 $appKeyReady ? null : 'APP_KEY kosong',
             ]))
         );
