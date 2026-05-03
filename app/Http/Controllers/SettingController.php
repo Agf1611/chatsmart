@@ -37,6 +37,11 @@ class SettingController extends Controller
         return null;
     }
 
+    private function installerFilesystemRequirements(): array
+    {
+        return getInstallerFilesystemStatus();
+    }
+
     public function index()
     {
         $historyCleanup = [
@@ -192,6 +197,18 @@ class SettingController extends Controller
                 'admin.password' => 'required|string|min:8|max:255',
             ]);
 
+            try {
+                ensureInstallerFilesystemReady();
+            } catch (\RuntimeException $e) {
+                $validator = Validator::make([], [])
+                    ->errors()
+                    ->add('Installer', $e->getMessage() . ' Periksa permission file/folder di hosting.');
+
+                return back()
+                    ->withErrors($validator)
+                    ->withInput();
+            }
+
             /** CREATE DATABASE CONNECTION STARTS **/
             $db_params = $request->input('database');
             Config::set(
@@ -222,11 +239,17 @@ class SettingController extends Controller
                 ];
 
                 foreach ($env as $k => $v) {
-                    setEnv($k, $v);
+                    if (!setEnv($k, $v)) {
+                        throw new \RuntimeException('Gagal menulis file .env saat menyimpan konfigurasi installer.');
+                    }
                 }
 
                 if (!config('app.key') && !getEnvValue('APP_KEY')) {
                     Artisan::call('key:generate', ['--force' => true]);
+
+                    if (!getEnvValue('APP_KEY')) {
+                        throw new \RuntimeException('APP_KEY gagal dibuat. Pastikan file .env bisa ditulis.');
+                    }
                 }
 
                 DB::purge('mysql');
@@ -268,19 +291,34 @@ class SettingController extends Controller
             $user->save();
             /** CREATE ADMIN USER END **/
 
-            setEnv('APP_INSTALLED', 'true');
+            if (!setEnv('APP_INSTALLED', 'true')) {
+                return backWithFlash('error', 'Gagal menandai aplikasi sebagai terinstall. Periksa permission file `.env`.');
+            }
             if (!getEnvValue('AUTH')) {
-                setEnv('AUTH', bin2hex(random_bytes(16)));
+                if (!setEnv('AUTH', bin2hex(random_bytes(16)))) {
+                    return backWithFlash('error', 'Gagal menyimpan token AUTH ke file `.env`.');
+                }
             }
             if (!getEnvValue('AI_INTERNAL_TOKEN')) {
-                setEnv('AI_INTERNAL_TOKEN', bin2hex(random_bytes(24)));
+                if (!setEnv('AI_INTERNAL_TOKEN', bin2hex(random_bytes(24)))) {
+                    return backWithFlash('error', 'Gagal menyimpan AI internal token ke file `.env`.');
+                }
             }
 
-            writeInstallLock([
+            if (!writeInstallLock([
                 'install_mode' => $request->input('install_mode'),
                 'admin_email' => $user->email,
                 'database' => $db_params['database'],
-            ]);
+            ])) {
+                return backWithFlash('error', 'Gagal membuat install lock. Periksa permission `storage/app` atau `bootstrap/cache`.');
+            }
+
+            Artisan::call('config:clear');
+            clearstatcache();
+
+            if (!isAppInstalled()) {
+                return backWithFlash('error', 'Installer tidak bisa memverifikasi status instalasi. Cek permission `.env`, `storage/app`, dan `bootstrap/cache`.');
+            }
 
             Auth::loginUsingId($user->id, true);
             return redirect()->route('home');
@@ -327,8 +365,11 @@ class SettingController extends Controller
             $enabled = in_array($name, $php_loaded_extensions);
         }
 
+        $filesystemRequirements = $this->installerFilesystemRequirements();
+
         return view('install', [
             'requirements' => $requirements,
+            'filesystemRequirements' => $filesystemRequirements,
         ]);
     }
 }

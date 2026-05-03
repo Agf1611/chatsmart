@@ -64,7 +64,98 @@ function clearCacheNode()
     }
 }
 
-function setEnv(string $key, ?string $value)
+function writeFileAtomically(string $path, string $contents): bool
+{
+    $directory = dirname($path);
+    if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
+        return false;
+    }
+
+    $tempPath = tempnam($directory, 'tmp');
+    if ($tempPath === false) {
+        return false;
+    }
+
+    $bytes = @file_put_contents($tempPath, $contents, LOCK_EX);
+    if ($bytes === false) {
+        @unlink($tempPath);
+        return false;
+    }
+
+    if (file_exists($path)) {
+        @chmod($tempPath, fileperms($path) & 0777);
+    }
+
+    if (@rename($tempPath, $path)) {
+        return true;
+    }
+
+    $copied = @copy($tempPath, $path);
+    @unlink($tempPath);
+
+    return $copied;
+}
+
+function canWritePath(string $path): bool
+{
+    if (file_exists($path)) {
+        return is_writable($path);
+    }
+
+    $directory = dirname($path);
+    while (!file_exists($directory)) {
+        $parent = dirname($directory);
+        if ($parent === $directory) {
+            break;
+        }
+
+        $directory = $parent;
+    }
+
+    return is_writable($directory);
+}
+
+function getInstallerFilesystemStatus(): array
+{
+    return [
+        [
+            'label' => '.env',
+            'path' => base_path('.env'),
+            'writable' => canWritePath(base_path('.env')),
+        ],
+        [
+            'label' => 'storage/app',
+            'path' => storage_path('app'),
+            'writable' => canWritePath(storage_path('app')),
+        ],
+        [
+            'label' => 'bootstrap/cache',
+            'path' => base_path('bootstrap/cache'),
+            'writable' => canWritePath(base_path('bootstrap/cache')),
+        ],
+    ];
+}
+
+function ensureInstallerFilesystemReady(): void
+{
+    $unwritablePaths = array_filter(getInstallerFilesystemStatus(), function ($item) {
+        return !$item['writable'];
+    });
+
+    if ($unwritablePaths === []) {
+        return;
+    }
+
+    $labels = array_map(function ($item) {
+        return $item['label'] . ' (' . $item['path'] . ')';
+    }, $unwritablePaths);
+
+    throw new RuntimeException(
+        'Installer butuh permission tulis ke: ' . implode(', ', $labels) . '.'
+    );
+}
+
+function setEnv(string $key, ?string $value): bool
 {
     $path = base_path('.env');
     $lines = file_exists($path) ? file($path, FILE_IGNORE_NEW_LINES) : [];
@@ -88,7 +179,7 @@ function setEnv(string $key, ?string $value)
         $lines[] = "{$key}={$escapedValue}";
     }
 
-    file_put_contents($path, implode(PHP_EOL, $lines) . PHP_EOL);
+    return writeFileAtomically($path, implode(PHP_EOL, $lines) . PHP_EOL);
 }
 
 function getEnvValue(string $key, ?string $default = null): ?string
@@ -123,14 +214,28 @@ function isAppInstalled(): bool
     ) || hasInstallLock();
 }
 
+function getInstallLockPaths(): array
+{
+    return [
+        storage_path('app/install.lock'),
+        base_path('bootstrap/cache/install.lock'),
+    ];
+}
+
 function getInstallLockPath(): string
 {
-    return storage_path('app/install.lock');
+    return getInstallLockPaths()[0];
 }
 
 function hasInstallLock(): bool
 {
-    return file_exists(getInstallLockPath());
+    foreach (getInstallLockPaths() as $path) {
+        if (file_exists($path)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function writeInstallLock(array $payload = []): bool
@@ -140,23 +245,27 @@ function writeInstallLock(array $payload = []): bool
         'app_url' => config('app.url'),
     ], $payload);
 
-    if (!is_dir(dirname(getInstallLockPath()))) {
-        mkdir(dirname(getInstallLockPath()), 0755, true);
+    $contents = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    $written = false;
+
+    foreach (getInstallLockPaths() as $path) {
+        $written = writeFileAtomically($path, $contents) || $written;
     }
 
-    return (bool) file_put_contents(
-        getInstallLockPath(),
-        json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-    );
+    return $written;
 }
 
 function removeInstallLock(): bool
 {
-    if (!hasInstallLock()) {
-        return true;
+    $removed = true;
+
+    foreach (getInstallLockPaths() as $path) {
+        if (file_exists($path) && !@unlink($path)) {
+            $removed = false;
+        }
     }
 
-    return unlink(getInstallLockPath());
+    return $removed;
 }
 
 function backWithFlash($type, $message)

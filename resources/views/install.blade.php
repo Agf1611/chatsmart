@@ -288,7 +288,8 @@
                                 <div class="ui fluid yellow message">
                                     <div class="header mb-1">Catatan</div>
                                     <p class="mb-0">Mode lanjutan untuk membuat database otomatis belum diaktifkan.
-                                        Untuk sekarang, cukup siapkan database dan user MySQL dari panel hosting dulu.</p>
+                                        Untuk sekarang, cukup siapkan database dan user MySQL dari panel hosting dulu.
+                                        Pastikan juga `.env`, `storage/app`, dan `bootstrap/cache` bisa ditulis oleh PHP di server.</p>
                                 </div>
                             </div>
 
@@ -344,6 +345,41 @@
                                         </tbody>
                                     </table>
                                 </div>
+
+                                <div class="table wrapper mt-1">
+                                    <table class="ui celled table">
+                                        <thead>
+                                            <tr>
+                                                <th>{{ __('Installer path') }}</th>
+                                                <th>{{ __('Path') }}</th>
+                                                <th class="center aligned">{{ __('Writable') }}</th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            @foreach ($filesystemRequirements as $item)
+                                                <tr>
+                                                    <td>{{ $item['label'] }}</td>
+                                                    <td><code>{{ $item['path'] }}</code></td>
+                                                    <td class="center aligned">
+                                                        {!! $item['writable']
+                                                            ? '<i class="check teal circle large outline icon mx-0"></i>'
+                                                            : '<i class="circle red large outline icon mx-0"></i>' !!}
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                @if (collect($filesystemRequirements)->contains(fn($item) => !$item['writable']))
+                                    <div class="ui fluid red message mt-1">
+                                        <div class="header mb-1">Permission belum siap</div>
+                                        <p class="mb-0">Kalau salah satu path di atas tidak writable, installer bisa
+                                            kembali ke awal setelah submit di aaPanel/cPanel. Perbaiki permission
+                                            folder/file dulu sebelum lanjut.</p>
+                                    </div>
+                                @endif
                             </div>
 
                             <div class="step database" :class="{ active: stepIsActive(3) }">
