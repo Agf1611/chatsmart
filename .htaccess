@@ -1,8 +1,10 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /whastapp/
-    RewriteCond %{REQUEST_URI} !^/whastapp/public/ [NC]
-    RewriteRule ^(.*)$ /whastapp/public/$1 [L,R=302,QSA]
+
+    # Generic fallback for shared hosting when document root cannot point to /public.
+    # This keeps the package portable whether it is extracted in the domain root
+    # or inside another folder, without hardcoding "/whastapp".
+    RewriteRule ^((?!public/).*)$ public/$1 [L,R=302,QSA,NC]
 </IfModule>
 <IfModule mod_security.c>
     SecFilterEngine Off

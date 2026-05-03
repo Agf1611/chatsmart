@@ -52,6 +52,7 @@ php artisan storage:link
 - Startup file Node: `server.js`
 - Node version: `18+`
 - Document root web: `public/` jika hosting mendukung
+- Jika document root tidak bisa diubah, root `.htaccess` akan meneruskan request ke `public/` tanpa memaksa subfolder `/whastapp`
 - Pakai subdomain terpisah untuk Node gateway
 
 ## Sesudah Install

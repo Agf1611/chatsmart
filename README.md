@@ -55,7 +55,7 @@ powershell -ExecutionPolicy Bypass -File tools\stop-chatsmart-sync-watcher.ps1
 ## Setup Web
 
 - Jika hosting mendukung custom document root, arahkan ke folder `public/`.
-- Jika tidak, paket hosting sudah menyertakan root `.htaccess` yang akan meneruskan request ke `public/`.
+- Jika tidak, paket hosting sudah menyertakan root `.htaccess` generik yang akan meneruskan request ke `public/` tanpa hardcode nama folder project seperti `/whastapp`.
 
 ## Setup Node.js
 

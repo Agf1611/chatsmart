@@ -110,7 +110,7 @@ sesuai lokasi folder project kamu.
 
 Catatan:
 
-- root `.htaccess` project sudah membantu untuk banyak kasus
+- root `.htaccess` project sudah membantu untuk banyak kasus dan tidak lagi hardcode `/whastapp`
 - tetapi cara paling aman tetap document root langsung ke `public/`
 
 ## 6. Setup Node.js App Di cPanel
