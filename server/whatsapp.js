@@ -34,6 +34,7 @@ const DEFAULT_WA_VERSION = Array.isArray(DEFAULT_CONNECTION_CONFIG?.version)
 const CREDENTIALS_ROOT = path.resolve(
   process.env.WA_CREDENTIALS_PATH || path.join(process.cwd(), "storage", "app", "wa-sessions")
 );
+const LEGACY_CREDENTIALS_ROOT = path.resolve(path.join(process.cwd(), "credentials"));
 
 function parseConfiguredWaVersion(rawVersion) {
   if (!rawVersion) {
@@ -83,6 +84,56 @@ function getCredentialPath(token) {
   return path.join(CREDENTIALS_ROOT, String(token));
 }
 
+function getLegacyCredentialPath(token) {
+  return path.join(LEGACY_CREDENTIALS_ROOT, String(token));
+}
+
+function copyCredentialDirectory(sourcePath, targetPath) {
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.cpSync(sourcePath, targetPath, { recursive: true, force: true });
+}
+
+function resolveCredentialPath(token) {
+  const primaryPath = getCredentialPath(token);
+  const legacyPath = getLegacyCredentialPath(token);
+
+  fs.mkdirSync(CREDENTIALS_ROOT, { recursive: true });
+
+  if (!fs.existsSync(primaryPath) && fs.existsSync(legacyPath)) {
+    try {
+      copyCredentialDirectory(legacyPath, primaryPath);
+      console.log(`Migrated legacy WA session for ${token} to ${primaryPath}`);
+    } catch (error) {
+      console.log(`Failed migrating legacy WA session for ${token}:`, error.message);
+      return legacyPath;
+    }
+  }
+
+  return fs.existsSync(primaryPath) ? primaryPath : legacyPath;
+}
+
+function hasCredentialState(token) {
+  return fs.existsSync(getCredentialPath(token)) || fs.existsSync(getLegacyCredentialPath(token));
+}
+
+function listStoredTokens() {
+  const tokens = new Set();
+
+  for (const rootPath of [CREDENTIALS_ROOT, LEGACY_CREDENTIALS_ROOT]) {
+    if (!fs.existsSync(rootPath)) {
+      continue;
+    }
+
+    for (const entry of fs.readdirSync(rootPath, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name) {
+        tokens.add(entry.name);
+      }
+    }
+  }
+
+  return Array.from(tokens);
+}
+
 function isSocketConnected(token) {
   return Boolean(sessions[token]?.user?.id);
 }
@@ -121,9 +172,10 @@ function clearMemoryState(token) {
 }
 
 function removeCredentialFolder(token) {
-  const credentialPath = getCredentialPath(token);
-  if (fs.existsSync(credentialPath)) {
-    fs.rmSync(credentialPath, { recursive: true, force: true });
+  for (const credentialPath of [getCredentialPath(token), getLegacyCredentialPath(token)]) {
+    if (fs.existsSync(credentialPath)) {
+      fs.rmSync(credentialPath, { recursive: true, force: true });
+    }
   }
 }
 
@@ -140,9 +192,8 @@ async function createSocket(token, io, usePairingCode) {
   const { version, isLatest, source } = await resolveWaVersion();
   console.log("using WA v", version.join("."), ", source:", source, ", isLatest:", isLatest);
 
-  fs.mkdirSync(CREDENTIALS_ROOT, { recursive: true });
-
-  const { state, saveCreds } = await useMultiFileAuthState(getCredentialPath(token));
+  const credentialPath = resolveCredentialPath(token);
+  const { state, saveCreds } = await useMultiFileAuthState(credentialPath);
   const socket = makeWASocket({
     version,
     browser: Browsers.macOS("Desktop", "Mpedia"),
@@ -188,6 +239,8 @@ async function createSocket(token, io, usePairingCode) {
         lastDisconnect?.error instanceof Boom
           ? lastDisconnect.error.output?.statusCode
           : lastDisconnect?.error?.output?.statusCode;
+      const disconnectMessage = lastDisconnect?.error?.message || lastDisconnect?.error?.data || "unknown";
+      console.log(`WA connection closed for ${token}. statusCode=${statusCode || "n/a"} reason=${disconnectMessage}`);
 
       await setStatus(token, "Disconnect");
 
@@ -237,7 +290,7 @@ async function createSocket(token, io, usePairingCode) {
 
       await clearConnection(token);
 
-      if (fs.existsSync(getCredentialPath(token))) {
+      if (hasCredentialState(token)) {
         setTimeout(() => {
           connectToWhatsApp(token, io, usePairingCode).catch((error) => console.log(error));
         }, 1000);
@@ -343,7 +396,7 @@ async function connectWaBeforeSend(token) {
     return true;
   }
 
-  if (!fs.existsSync(getCredentialPath(token))) {
+  if (!hasCredentialState(token)) {
     return false;
   }
 
@@ -618,7 +671,7 @@ async function initialize(req, res) {
     return res.send({ status: false, message: "Wrong Parameterss" });
   }
 
-  if (!fs.existsSync(getCredentialPath(token))) {
+  if (!hasCredentialState(token)) {
     return res.send({ status: false, message: `${token} connection failed` });
   }
 
@@ -632,15 +685,10 @@ async function initialize(req, res) {
 }
 
 async function restoreSessions(io = null) {
-  if (!fs.existsSync(CREDENTIALS_ROOT)) {
+  const tokens = listStoredTokens();
+  if (tokens.length === 0) {
     return [];
   }
-
-  const tokens = fs
-    .readdirSync(CREDENTIALS_ROOT, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter(Boolean);
 
   const results = [];
 

@@ -35,6 +35,7 @@ Gunakan file zip rilis bersih dari folder `dist/`.
    - `AUTH`
    - `CORS_ALLOWED_ORIGINS`
    - `BAILEYS_FETCH_LATEST=false`
+   - `WA_CREDENTIALS_PATH=/home/USER/wa-sessions`
 5. Jalankan:
 ```bash
 composer install --no-dev --optimize-autoloader

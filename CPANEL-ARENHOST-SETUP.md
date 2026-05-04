@@ -164,6 +164,8 @@ PORT_NODE=3100
 BAILEYS_FETCH_LATEST=false
 # opsional: pakai bila ingin pin versi WA manual, contoh 2,2329,9
 BAILEYS_VERSION=
+# opsional tapi direkomendasikan: simpan session WA di path permanen
+WA_CREDENTIALS_PATH=/home/USER/wa-sessions
 
 WA_URL_SERVER=https://node-wasickas.my.id
 CORS_ALLOWED_ORIGINS=https://wasickas.my.id
@@ -187,6 +189,7 @@ Catatan penting:
 - `CORS_ALLOWED_ORIGINS` = domain web yang diizinkan mengakses Node
 - `AUTH` harus random dan jangan pakai contoh bawaan
 - pada shared hosting, biarkan `BAILEYS_FETCH_LATEST=false` agar startup Node tidak perlu version check jarak jauh
+- jika sering minta scan ulang setelah restart/deploy, isi `WA_CREDENTIALS_PATH` ke folder permanen di home hosting dan jangan ikut dihapus saat update
 
 ## 8. Install Dependency
 
