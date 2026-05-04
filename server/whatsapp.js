@@ -301,11 +301,13 @@ async function createSocket(token, io, usePairingCode) {
   socket.ev.on("creds.update", saveCreds);
   socket.ev.on("messages.upsert", (upsert) => IncomingMessage(upsert, socket));
 
-  if (usePairingCode && !state.creds?.me) {
+  if (usePairingCode && !state.creds?.registered) {
     try {
+      const savedPhoneNumber = getSavedPhoneNumber(token);
+      console.log(`Requesting pairing code for ${token} with phone ${savedPhoneNumber}`);
       await socket.waitForSocketOpen();
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      pairingCode[token] = await socket.requestPairingCode(getSavedPhoneNumber(token));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      pairingCode[token] = await socket.requestPairingCode(savedPhoneNumber);
       delete reconnectAfterAuthReset[token];
       io?.emit("code", {
         token,
@@ -313,9 +315,10 @@ async function createSocket(token, io, usePairingCode) {
         message: "Go to whatsapp -> link device -> link with phone number, and pairing with this code.",
       });
     } catch (error) {
+      console.log(`Failed requesting pairing code for ${token}:`, error.message);
       io?.emit("message", {
         token,
-        message: "Time out, please refresh page",
+        message: `Failed requesting pairing code: ${error.message || "unknown error"}`,
       });
     }
   }
@@ -324,6 +327,25 @@ async function createSocket(token, io, usePairingCode) {
 }
 
 const connectToWhatsApp = async (token, io = null, usePairingCode = false) => {
+  if (usePairingCode && hasCredentialState(token) && !isSocketConnected(token)) {
+    const credentialPath = resolveCredentialPath(token);
+    const credsPath = path.join(credentialPath, "creds.json");
+
+    try {
+      if (fs.existsSync(credsPath)) {
+        const creds = JSON.parse(fs.readFileSync(credsPath, "utf8"));
+        if (creds?.registered === false) {
+          console.log(`Removing stale unregistered pairing state for ${token}`);
+          removeCredentialFolder(token);
+          delete pairingCode[token];
+          delete qrcode[token];
+        }
+      }
+    } catch (error) {
+      console.log(`Failed checking pairing state for ${token}:`, error.message);
+    }
+  }
+
   if (qrcode[token] && !usePairingCode) {
     io?.emit("qrcode", {
       token,

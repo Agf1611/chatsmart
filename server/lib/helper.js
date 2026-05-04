@@ -53,8 +53,16 @@ function formatReceipt(value) {
     return value;
   }
 
+  if (digits.startsWith("00")) {
+    digits = digits.slice(2);
+  }
+
   if (digits.startsWith("0")) {
     digits = `62${digits.slice(1)}`;
+  }
+
+  if (digits.startsWith("8")) {
+    digits = `62${digits}`;
   }
 
   return `${digits}@s.whatsapp.net`;
