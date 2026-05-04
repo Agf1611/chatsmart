@@ -219,19 +219,28 @@
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">OpenAI API Key</label>
-                                        <input type="text" name="openai_api_key" class="form-control" placeholder="{{ $aiBotSettings['openai_key'] ?: 'Masukkan API key OpenAI' }}">
+                                        <input type="text" name="openai_api_key" id="openai_api_key" class="form-control" placeholder="{{ $aiBotSettings['openai_key'] ?: 'Masukkan API key OpenAI' }}">
                                         <div class="form-text">Kosongkan jika tidak ingin mengubah key yang sudah tersimpan.</div>
+                                        <div class="mt-2 d-flex gap-2 flex-wrap">
+                                            <button type="button" class="btn btn-outline-primary btn-sm" id="test-openai-btn">Test OpenAI</button>
+                                        </div>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">Gemini API Key</label>
-                                        <input type="text" name="gemini_api_key" class="form-control" placeholder="{{ $aiBotSettings['gemini_key'] ?: 'Masukkan API key Gemini' }}">
+                                        <input type="text" name="gemini_api_key" id="gemini_api_key" class="form-control" placeholder="{{ $aiBotSettings['gemini_key'] ?: 'Masukkan API key Gemini' }}">
                                         <div class="form-text">Kosongkan jika tidak ingin mengubah key yang sudah tersimpan.</div>
+                                        <div class="mt-2 d-flex gap-2 flex-wrap">
+                                            <button type="button" class="btn btn-outline-primary btn-sm" id="test-gemini-btn">Test Gemini</button>
+                                        </div>
                                     </div>
                                     <div class="col-12">
                                         <button type="submit" class="btn btn-primary btn-sm">Simpan AI Settings</button>
                                     </div>
                                 </div>
                             </form>
+                            <div class="alert alert-secondary border mt-3 mb-0" id="ai-test-result">
+                                Status test API akan tampil di sini.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -304,6 +313,45 @@
                     $btn.prop('disabled', false).text('Test Node');
                 }
             });
+        });
+
+        const runAiTest = (provider, $btn, apiKeySelector) => {
+            $btn.prop('disabled', true).text('Testing...');
+            $.ajax({
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                url: '{{ route('settings.ai-bot.test') }}',
+                data: {
+                    provider: provider,
+                    api_key: $(apiKeySelector).val(),
+                },
+                success: function(response) {
+                    $('#ai-test-result')
+                        .removeClass('alert-secondary alert-success alert-danger')
+                        .addClass('alert-success')
+                        .text(response.message || 'API key valid.');
+                },
+                error: function(xhr) {
+                    const message = xhr.responseJSON?.message || 'Test API gagal dijalankan.';
+                    $('#ai-test-result')
+                        .removeClass('alert-secondary alert-success alert-danger')
+                        .addClass('alert-danger')
+                        .text(message);
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).text(provider === 'openai' ? 'Test OpenAI' : 'Test Gemini');
+                }
+            });
+        };
+
+        $('#test-openai-btn').on('click', function() {
+            runAiTest('openai', $(this), '#openai_api_key');
+        });
+
+        $('#test-gemini-btn').on('click', function() {
+            runAiTest('gemini', $(this), '#gemini_api_key');
         });
     </script>
 </x-layout-dashboard>

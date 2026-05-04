@@ -121,6 +121,7 @@ Route::middleware(['auth', 'approved'])->group(function (){
   Route::post('/settings/history-cleanup',[SettingController::class,'setHistoryCleanup'])->name('settings.history-cleanup')->middleware('admin');
   Route::post('/settings/history-cleanup/run',[SettingController::class,'runHistoryCleanup'])->name('settings.history-cleanup.run')->middleware('admin');
   Route::post('/settings/ai-bot',[SettingController::class,'setAiBotSettings'])->name('settings.ai-bot')->middleware('admin');
+  Route::post('/settings/ai-bot/test',[SettingController::class,'testAiProvider'])->name('settings.ai-bot.test')->middleware('admin');
   Route::get('/admin/update',[UpdateController::class,'index'])->name('admin.update')->middleware('admin');
   Route::post('/admin/update/sync',[UpdateController::class,'sync'])->name('admin.update.sync')->middleware('admin');
   Route::get('/admin/operational-audit',[OperationalAuditController::class,'index'])->name('admin.operational-audit')->middleware('admin');

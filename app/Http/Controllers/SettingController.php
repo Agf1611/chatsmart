@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -269,6 +270,81 @@ class SettingController extends Controller
             'type' => 'success',
             'msg' => 'AI bot settings updated.',
         ]);
+    }
+
+    public function testAiProvider(Request $request)
+    {
+        $request->validate([
+            'provider' => ['required', 'in:openai,gemini'],
+            'api_key' => ['nullable', 'string'],
+        ]);
+
+        $provider = (string) $request->provider;
+        $apiKey = trim((string) ($request->api_key ?: (
+            $provider === 'openai' ? env('OPENAI_API_KEY') : env('GEMINI_API_KEY')
+        )));
+
+        if ($apiKey === '') {
+            return response()->json([
+                'ok' => false,
+                'provider' => $provider,
+                'message' => 'API key masih kosong.',
+            ], 422);
+        }
+
+        try {
+            if ($provider === 'openai') {
+                $response = Http::withToken($apiKey)
+                    ->timeout(10)
+                    ->get('https://api.openai.com/v1/models');
+
+                if (!$response->successful()) {
+                    return response()->json([
+                        'ok' => false,
+                        'provider' => $provider,
+                        'status' => $response->status(),
+                        'message' => 'OpenAI menolak token ini.',
+                    ], 422);
+                }
+
+                $modelCount = count((array) $response->json('data', []));
+
+                return response()->json([
+                    'ok' => true,
+                    'provider' => $provider,
+                    'status' => $response->status(),
+                    'message' => 'OpenAI API key valid. Model terdeteksi: ' . $modelCount . '.',
+                ]);
+            }
+
+            $response = Http::timeout(10)->get('https://generativelanguage.googleapis.com/v1beta/models', [
+                'key' => $apiKey,
+            ]);
+
+            if (!$response->successful()) {
+                return response()->json([
+                    'ok' => false,
+                    'provider' => $provider,
+                    'status' => $response->status(),
+                    'message' => 'Gemini menolak token ini.',
+                ], 422);
+            }
+
+            $modelCount = count((array) $response->json('models', []));
+
+            return response()->json([
+                'ok' => true,
+                'provider' => $provider,
+                'status' => $response->status(),
+                'message' => 'Gemini API key valid. Model terdeteksi: ' . $modelCount . '.',
+            ]);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'ok' => false,
+                'provider' => $provider,
+                'message' => 'Gagal test API: ' . $th->getMessage(),
+            ], 500);
+        }
     }
 
     public function activate_license(Request $request)
