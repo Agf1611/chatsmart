@@ -87,7 +87,7 @@
                                         </div>
                                 </div>
                                 <div
-                                    class="row m-t-lg {{ in_array(env('TYPE_SERVER'), ['other', 'hosting']) ? 'd-block' : 'd-none' }} formUrlNode">
+                                    class="row m-t-lg {{ env('TYPE_SERVER') === 'other' ? 'd-block' : 'd-none' }} formUrlNode">
                                     <div class="col-md-6">
                                         <label for="settingsInputUserName " class="form-label">URL Node</label>
                                         <div class="input-group">
@@ -97,12 +97,20 @@
                                                 id="settingsInputUserName" aria-describedby="settingsInputUserName-add">
                                         </div>
                                         <small class="text-muted d-block mt-2">
-                                            Untuk shared hosting atau tunnel, isi URL publik penuh runtime Node seperti
-                                            <code>https://node.domainkamu.com</code> tanpa menambahkan port lokal
-                                            <code>:3100</code>. Jika Node dipasang di subdomain terpisah, jangan isi URL dashboard Laravel di sini.
+                                            Isi hanya jika runtime Node memakai domain atau subdomain terpisah, misalnya
+                                            <code>https://node.domainkamu.com</code>. Jangan isi URL dashboard Laravel di sini.
                                         </small>
                                     </div>
 
+                                </div>
+                                <div class="row m-t-lg formHostingHint {{ env('TYPE_SERVER') === 'hosting' ? 'd-block' : 'd-none' }}">
+                                    <div class="col-md-8">
+                                        <div class="alert alert-light border mb-0">
+                                            Mode <strong>Hosting Shared</strong> akan memakai domain website yang sama
+                                            untuk Socket.IO dan endpoint Node, seperti paket hosting lama. Anda tidak
+                                            perlu mengisi URL Node terpisah.
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div class="row m-t-lg ">
@@ -225,11 +233,16 @@
     <script>
         $('#server').on('change', function() {
             let type = $('#server :selected').val();
-            console.log(type);
-            if (type === 'other' || type === 'hosting') {
+            if (type === 'other') {
                 $('.formUrlNode').removeClass('d-none')
             } else {
                 $('.formUrlNode').addClass('d-none')
+            }
+
+            if (type === 'hosting') {
+                $('.formHostingHint').removeClass('d-none')
+            } else {
+                $('.formHostingHint').addClass('d-none')
 
             }
         })

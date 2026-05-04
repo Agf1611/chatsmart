@@ -1,6 +1,12 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # In shared-hosting mode, let Socket.IO and Node backend endpoints
+    # pass through untouched so the Node app can receive them on the
+    # same domain just like the older hosting package.
+    RewriteCond %{REQUEST_URI} !^/socket\.io(/.*)?$ [NC]
+    RewriteCond %{REQUEST_URI} !^/backend-[^/]+$ [NC]
+
     # Shared-hosting fallback: internally serve files from /public
     # without redirecting the browser URL and without hardcoding
     # a project folder such as "/whastapp".

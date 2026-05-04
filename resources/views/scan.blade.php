@@ -101,12 +101,16 @@
         const device = '{{ $number->body }}';
         const currentOrigin = window.location.origin;
         const currentHost = window.location.hostname;
+        const serverType = (socketRuntime.serverType || '').toLowerCase();
         const configuredNodeUrl = (socketRuntime.nodeUrl || '').replace(/\/+$/, '');
         const localNodeUrl = (socketRuntime.localNodeUrl || '').replace(/\/+$/, '');
         const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(currentHost);
-        const socketEndpoint = isLocalHost
+        const useSameOriginHosting = serverType === 'hosting';
+        const socketEndpoint = useSameOriginHosting
+            ? currentOrigin
+            : (isLocalHost
             ? (localNodeUrl || configuredNodeUrl || currentOrigin)
-            : (configuredNodeUrl || currentOrigin);
+            : (configuredNodeUrl || currentOrigin));
 
         const socket = io(socketEndpoint, {
             path: '/socket.io',
@@ -160,7 +164,9 @@
         socket.on('connect', () => {
             if (!isConnected) {
                 renderStatus('info', 'Terhubung ke runtime Node, menunggu QR...');
-                renderSummary('info', 'Runtime Node aktif. Silakan scan QR sampai status berubah menjadi connected.');
+                renderSummary('info', useSameOriginHosting
+                    ? 'Runtime Node aktif di domain yang sama. Silakan scan QR sampai status berubah menjadi connected.'
+                    : 'Runtime Node aktif. Silakan scan QR sampai status berubah menjadi connected.');
                 renderConnectionState('Waiting for scan');
             }
         });
