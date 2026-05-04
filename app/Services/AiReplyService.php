@@ -480,17 +480,19 @@ class AiReplyService
 
     protected function formatOpenAiInput(array $messages): array
     {
-        return array_map(function ($message) {
+        return array_values(array_filter(array_map(function ($message) {
+            $role = (string) ($message['role'] ?? 'user');
+            $content = trim((string) ($message['content'] ?? ''));
+
+            if ($content === '') {
+                return null;
+            }
+
             return [
-                'role' => $message['role'] === 'system' ? 'developer' : $message['role'],
-                'content' => [
-                    [
-                        'type' => 'input_text',
-                        'text' => $message['content'],
-                    ],
-                ],
+                'role' => $role === 'system' ? 'developer' : $role,
+                'content' => $content,
             ];
-        }, $messages);
+        }, $messages)));
     }
 
     protected function extractOpenAiText(array $payload): string
