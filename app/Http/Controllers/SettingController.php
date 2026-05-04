@@ -16,6 +16,34 @@ use Illuminate\Support\Str;
 
 class SettingController extends Controller
 {
+    private array $deploymentProfiles = [
+        'auto' => [
+            'label' => 'Auto Detect',
+            'description' => 'Installer dan settings akan memilih mode terbaik berdasarkan host yang dipakai.',
+            'badge' => 'recommended',
+        ],
+        'localhost' => [
+            'label' => 'Localhost / XAMPP',
+            'description' => 'Untuk development lokal di Windows/Linux. Node memakai localhost internal.',
+            'badge' => 'local',
+        ],
+        'hosting_same_domain' => [
+            'label' => 'Shared Hosting / Same Domain',
+            'description' => 'Laravel dan Node dipublikasikan lewat domain yang sama atau reverse proxy yang sama.',
+            'badge' => 'shared',
+        ],
+        'hosting_remote_node' => [
+            'label' => 'Hosting + Remote Node',
+            'description' => 'Laravel di hosting, tetapi Node berjalan di server lain atau subdomain terpisah.',
+            'badge' => 'remote',
+        ],
+        'self_hosted_tunnel' => [
+            'label' => 'Server Linux + Tunnel',
+            'description' => 'Laravel berjalan di server sendiri dan Node dipublikasikan lewat Cloudflare Tunnel/subdomain.',
+            'badge' => 'tunnel',
+        ],
+    ];
+
     public function __construct()
     {
         $this->middleware('admin')->except(
@@ -57,32 +85,126 @@ class SettingController extends Controller
             'default_timeout' => (int) env('AI_DEFAULT_TIMEOUT', 20),
             'default_max_output' => (int) env('AI_DEFAULT_MAX_OUTPUT', 400),
         ];
+        $serverPreview = $this->buildServerPreview([
+            'deployment_profile' => inferDeploymentProfileFromEnv(),
+            'app_url' => getEnvValue('APP_URL', (string) config('app.url')),
+            'port_node' => (int) getEnvValue('PORT_NODE', (string) env('PORT_NODE', '3100')),
+            'url_node' => getNodeRuntimePublicUrl(),
+            'url_node_internal' => getNodeRuntimeInternalUrl(),
+        ]);
 
-        return view('pages.admin.settings', compact('historyCleanup', 'aiBotSettings'));
+        return view('pages.admin.settings', [
+            'historyCleanup' => $historyCleanup,
+            'aiBotSettings' => $aiBotSettings,
+            'serverPreview' => $serverPreview,
+            'serverProfiles' => $this->deploymentProfiles(),
+        ]);
+    }
+
+    private function deploymentProfiles(): array
+    {
+        return $this->deploymentProfiles;
+    }
+
+    private function buildServerPreview(array $input): array
+    {
+        $profile = (string) ($input['deployment_profile'] ?? 'auto');
+        $port = (int) ($input['port_node'] ?? 3100);
+
+        return array_merge(
+            $this->deploymentProfiles()[$profile] ?? $this->deploymentProfiles()['auto'],
+            buildDeploymentProfileConfig($profile, [
+                'app_url' => $input['app_url'] ?? config('app.url'),
+                'port' => $port,
+                'node_public_url' => $input['url_node'] ?? '',
+                'node_internal_url' => $input['url_node_internal'] ?? '',
+            ])
+        );
     }
 
     public function setServer(Request $request)
     {
         $request->validate([
-            'typeServer' => ['required'],
-            'portnode' => ['required'],
-            'urlnode' => ['required_if:typeServer,other', 'nullable', 'url'],
+            'deployment_profile' => ['required', 'in:auto,localhost,hosting_same_domain,hosting_remote_node,self_hosted_tunnel'],
+            'app_url' => ['required', 'url'],
+            'portnode' => ['required', 'integer', 'min:1', 'max:65535'],
+            'urlnode' => ['nullable', 'url'],
+            'urlnode_internal' => ['nullable', 'url'],
         ]);
-        $normalizedNodeUrl = rtrim((string) $request->urlnode, '/');
-        $publicNodeUrl = $request->typeServer === 'other'
-            ? $normalizedNodeUrl
-            : ($request->typeServer === 'hosting'
-                ? rtrim((string) url('/'), '/')
-                : 'http://127.0.0.1:' . $request->portnode);
-        $internalNodeUrl = 'http://127.0.0.1:' . $request->portnode;
-        setEnv('TYPE_SERVER', $request->typeServer);
-        setEnv('PORT_NODE', $request->portnode);
-        setEnv('WA_URL_SERVER', $publicNodeUrl);
-        setEnv('WA_URL_SERVER_PUBLIC', $publicNodeUrl);
-        setEnv('WA_URL_SERVER_INTERNAL', $internalNodeUrl);
+
+        $profileConfig = buildDeploymentProfileConfig($request->deployment_profile, [
+            'request' => $request,
+            'app_url' => $request->app_url,
+            'port' => $request->portnode,
+            'node_public_url' => $request->urlnode,
+            'node_internal_url' => $request->urlnode_internal,
+        ]);
+
+        foreach ($profileConfig as $key => $value) {
+            if (!setEnv($key, $value)) {
+                return back()->withErrors([
+                    'Installer' => 'Gagal menyimpan konfigurasi `'. $key .'` ke `.env`.',
+                ])->withInput();
+            }
+        }
+
         return back()->with('alert', [
             'type' => 'success',
-            'msg' => 'Success Update configuration!',
+            'msg' => 'Server profile berhasil diperbarui.',
+        ]);
+    }
+
+    public function testServerRuntime(Request $request)
+    {
+        $request->validate([
+            'deployment_profile' => ['required', 'in:auto,localhost,hosting_same_domain,hosting_remote_node,self_hosted_tunnel'],
+            'app_url' => ['required', 'url'],
+            'portnode' => ['required', 'integer', 'min:1', 'max:65535'],
+            'urlnode' => ['nullable', 'url'],
+            'urlnode_internal' => ['nullable', 'url'],
+        ]);
+
+        $profileConfig = buildDeploymentProfileConfig($request->deployment_profile, [
+            'request' => $request,
+            'app_url' => $request->app_url,
+            'port' => $request->portnode,
+            'node_public_url' => $request->urlnode,
+            'node_internal_url' => $request->urlnode_internal,
+        ]);
+
+        $tests = [];
+        foreach (array_unique(array_filter([
+            $profileConfig['WA_URL_SERVER_INTERNAL'] ?? '',
+            $profileConfig['WA_URL_SERVER_PUBLIC'] ?? '',
+        ])) as $target) {
+            try {
+                $response = \Illuminate\Support\Facades\Http::timeout(4)->withOptions([
+                    'verify' => false,
+                ])->get(rtrim($target, '/') . '/socket.io/', [
+                    'EIO' => 4,
+                    'transport' => 'polling',
+                    't' => Str::random(6),
+                ]);
+
+                $tests[] = [
+                    'target' => $target,
+                    'status' => $response->status(),
+                    'healthy' => $response->successful() && str_contains((string) $response->body(), 'sid'),
+                ];
+            } catch (\Throwable $th) {
+                $tests[] = [
+                    'target' => $target,
+                    'status' => null,
+                    'healthy' => false,
+                    'error' => $th->getMessage(),
+                ];
+            }
+        }
+
+        return response()->json([
+            'profile' => $profileConfig['deployment_profile'],
+            'config' => $profileConfig,
+            'tests' => $tests,
         ]);
     }
 
@@ -199,6 +321,11 @@ class SettingController extends Controller
                 'admin.username' => 'required|string|max:255',
                 'admin.email' => 'required|email|max:255',
                 'admin.password' => 'required|string|min:8|max:255',
+                'deployment_profile' => 'required|in:auto,localhost,hosting_same_domain,hosting_remote_node,self_hosted_tunnel',
+                'app_url' => 'required|url',
+                'portnode' => 'required|integer|min:1|max:65535',
+                'urlnode' => 'nullable|url',
+                'urlnode_internal' => 'nullable|url',
             ]);
 
             try {
@@ -235,7 +362,13 @@ class SettingController extends Controller
             }
             /** CREATE DATABASE CONNECTION ENDS **/
             try {
-                $serverDefaults = resolveInstallerServerDefaults($request);
+                $serverDefaults = buildDeploymentProfileConfig($request->deployment_profile, [
+                    'request' => $request,
+                    'app_url' => $request->app_url,
+                    'port' => $request->portnode,
+                    'node_public_url' => $request->urlnode,
+                    'node_internal_url' => $request->urlnode_internal,
+                ]);
                 $env = [
                     'DB_HOST' => $db_params['host'],
                     'DB_DATABASE' => $db_params['database'],
@@ -386,6 +519,14 @@ class SettingController extends Controller
         return view('install', [
             'requirements' => $requirements,
             'filesystemRequirements' => $filesystemRequirements,
+            'serverProfiles' => $this->deploymentProfiles(),
+            'serverPreview' => $this->buildServerPreview([
+                'deployment_profile' => inferDeploymentProfileFromEnv(),
+                'app_url' => url('/'),
+                'port_node' => (int) getEnvValue('PORT_NODE', (string) env('PORT_NODE', '3100')),
+                'url_node' => getNodeRuntimePublicUrl(),
+                'url_node_internal' => getNodeRuntimeInternalUrl(),
+            ]),
         ]);
     }
 }

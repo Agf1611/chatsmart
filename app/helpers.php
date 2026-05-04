@@ -106,35 +106,153 @@ function normalizeUrlOrigin(?string $url): string
     return rtrim($origin, '/');
 }
 
-function resolveInstallerServerDefaults(\Illuminate\Http\Request $request, $defaultPort = 3100): array
+function guessNodeSubdomainUrl(?string $appUrl): string
 {
-    $port = (string) $defaultPort;
-    $appUrl = rtrim((string) $request->root(), '/');
-    $host = (string) $request->getHost();
-    $isLocal = isLocalOrPrivateHost($host);
-    $serverType = $isLocal ? 'localhost' : 'hosting';
-    $publicNodeUrl = $isLocal ? 'http://127.0.0.1:' . $port : $appUrl;
-    $internalNodeUrl = 'http://127.0.0.1:' . $port;
+    $origin = normalizeUrlOrigin($appUrl);
+    if ($origin === '') {
+        return '';
+    }
+
+    $parts = parse_url($origin);
+    if (!$parts || empty($parts['scheme']) || empty($parts['host'])) {
+        return '';
+    }
+
+    $host = strtolower($parts['host']);
+    if (isLocalOrPrivateHost($host)) {
+        return '';
+    }
+
+    if (str_starts_with($host, 'node.')) {
+        return $origin;
+    }
+
+    $labels = explode('.', $host);
+    if (count($labels) >= 3) {
+        $labels[0] = 'node';
+    } else {
+        array_unshift($labels, 'node');
+    }
+
+    $nodeOrigin = $parts['scheme'] . '://' . implode('.', $labels);
+    if (!empty($parts['port'])) {
+        $nodeOrigin .= ':' . $parts['port'];
+    }
+
+    return rtrim($nodeOrigin, '/');
+}
+
+function inferDeploymentProfileFromEnv(): string
+{
+    $serverType = strtolower((string) getEnvValue('TYPE_SERVER', (string) env('TYPE_SERVER', '')));
+    $publicUrl = getNodeRuntimePublicUrl();
+    $internalUrl = getNodeRuntimeInternalUrl();
+
+    if ($serverType === 'localhost') {
+        return 'localhost';
+    }
+
+    if ($serverType === 'hosting') {
+        return 'hosting_same_domain';
+    }
+
+    if ($serverType === 'other') {
+        if ($internalUrl !== '' && str_contains($internalUrl, '127.0.0.1')) {
+            return 'self_hosted_tunnel';
+        }
+
+        if ($publicUrl !== '') {
+            return 'hosting_remote_node';
+        }
+    }
+
+    return 'auto';
+}
+
+function buildDeploymentProfileConfig(string $profile, array $options = []): array
+{
+    $request = $options['request'] ?? null;
+    $port = (string) ($options['port'] ?? 3100);
+    $appUrl = rtrim((string) ($options['app_url']
+        ?? ($request ? $request->root() : getEnvValue('APP_URL', (string) config('app.url')))), '/');
+
+    $host = '';
+    $isSecure = false;
+    if ($request) {
+        $host = (string) $request->getHost();
+        $isSecure = $request->isSecure();
+    } elseif ($appUrl !== '') {
+        $host = (string) parse_url($appUrl, PHP_URL_HOST);
+        $isSecure = strtolower((string) parse_url($appUrl, PHP_URL_SCHEME)) === 'https';
+    }
+
+    $nodePublicUrl = rtrim((string) ($options['node_public_url'] ?? ''), '/');
+    $nodeInternalUrl = rtrim((string) ($options['node_internal_url'] ?? ''), '/');
+
+    if ($nodePublicUrl === '') {
+        $nodePublicUrl = guessNodeSubdomainUrl($appUrl);
+    }
+
+    $resolvedProfile = $profile === 'auto'
+        ? (isLocalOrPrivateHost($host) ? 'localhost' : 'hosting_same_domain')
+        : $profile;
+
+    switch ($resolvedProfile) {
+        case 'localhost':
+            $typeServer = 'localhost';
+            $publicNodeUrl = 'http://127.0.0.1:' . $port;
+            $internalNodeUrl = 'http://127.0.0.1:' . $port;
+            break;
+
+        case 'hosting_remote_node':
+            $typeServer = 'other';
+            $publicNodeUrl = $nodePublicUrl !== '' ? $nodePublicUrl : $appUrl;
+            $internalNodeUrl = $nodeInternalUrl !== '' ? $nodeInternalUrl : $publicNodeUrl;
+            break;
+
+        case 'self_hosted_tunnel':
+            $typeServer = 'other';
+            $publicNodeUrl = $nodePublicUrl !== '' ? $nodePublicUrl : $appUrl;
+            $internalNodeUrl = $nodeInternalUrl !== '' ? $nodeInternalUrl : 'http://127.0.0.1:' . $port;
+            break;
+
+        case 'hosting_same_domain':
+        default:
+            $typeServer = 'hosting';
+            $publicNodeUrl = $appUrl;
+            $internalNodeUrl = $nodeInternalUrl !== '' ? $nodeInternalUrl : $appUrl;
+            $resolvedProfile = 'hosting_same_domain';
+            break;
+    }
 
     $corsOrigins = array_values(array_unique(array_filter([
         normalizeUrlOrigin($appUrl),
         normalizeUrlOrigin($publicNodeUrl),
-        $isLocal ? 'http://localhost' : null,
-        $isLocal ? 'http://127.0.0.1' : null,
+        $resolvedProfile === 'localhost' ? 'http://localhost' : null,
+        $resolvedProfile === 'localhost' ? 'http://127.0.0.1' : null,
     ])));
 
     return [
+        'deployment_profile' => $resolvedProfile,
         'APP_URL' => $appUrl,
-        'TYPE_SERVER' => $serverType,
+        'TYPE_SERVER' => $typeServer,
         'PORT_NODE' => $port,
         'WA_URL_SERVER' => $publicNodeUrl,
         'WA_URL_SERVER_PUBLIC' => $publicNodeUrl,
         'WA_URL_SERVER_INTERNAL' => $internalNodeUrl,
         'CORS_ALLOWED_ORIGINS' => implode(',', $corsOrigins),
         'ORIGIN' => normalizeUrlOrigin($appUrl),
-        'SESSION_SECURE_COOKIE' => $request->isSecure() ? 'true' : 'false',
+        'SESSION_SECURE_COOKIE' => $isSecure ? 'true' : 'false',
         'WA_CREDENTIALS_PATH' => getNodeCredentialsBasePath(),
     ];
+}
+
+function resolveInstallerServerDefaults(\Illuminate\Http\Request $request, $defaultPort = 3100): array
+{
+    return buildDeploymentProfileConfig('auto', [
+        'request' => $request,
+        'port' => $defaultPort,
+    ]);
 }
 
 function generateAppKeyValue(): string

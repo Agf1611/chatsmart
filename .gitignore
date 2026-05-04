@@ -22,5 +22,6 @@
 /public/storage
 .env
 .env.backup
+*.zip
 Thumbs.db
 .DS_Store

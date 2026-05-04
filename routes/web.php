@@ -117,6 +117,7 @@ Route::middleware(['auth', 'approved'])->group(function (){
   
   Route::get('/admin/settings',[SettingController::class,'index'])->name('admin.settings')->middleware('admin');
   Route::post('/settings/server',[SettingController::class,'setServer'])->name('setServer')->middleware('admin');
+  Route::post('/settings/server/test',[SettingController::class,'testServerRuntime'])->name('settings.server.test')->middleware('admin');
   Route::post('/settings/history-cleanup',[SettingController::class,'setHistoryCleanup'])->name('settings.history-cleanup')->middleware('admin');
   Route::post('/settings/history-cleanup/run',[SettingController::class,'runHistoryCleanup'])->name('settings.history-cleanup.run')->middleware('admin');
   Route::post('/settings/ai-bot',[SettingController::class,'setAiBotSettings'])->name('settings.ai-bot')->middleware('admin');

@@ -142,6 +142,42 @@
         <section class="surface-card">
             <div class="account-shell__header">
                 <div>
+                    <p class="section-kicker">Setup Center</p>
+                    <h3 class="section-title">Checklist onboarding cepat</h3>
+                    <div class="section-line"></div>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{{ route('admin.settings') }}" class="btn btn-outline-primary chatsmart-btn">
+                        <i class="bi bi-sliders"></i> Server Settings
+                    </a>
+                    <a href="{{ route('rest-api') }}" class="btn btn-outline-secondary chatsmart-btn">
+                        <i class="bi bi-file-earmark-code"></i> API Docs
+                    </a>
+                </div>
+            </div>
+            <div class="row g-3">
+                @foreach ($operational['setup'] as $setupItem)
+                    <div class="col-md-6 col-xl-4">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                <div>
+                                    <div class="fw-semibold">{{ $setupItem['label'] }}</div>
+                                    <div class="small text-muted">{{ $setupItem['message'] }}</div>
+                                </div>
+                                <span class="badge bg-{{ $setupItem['status'] === 'done' ? 'success' : ($setupItem['status'] === 'info' ? 'info' : 'warning') }}">
+                                    {{ $setupItem['status'] === 'done' ? 'Done' : 'Need setup' }}
+                                </span>
+                            </div>
+                            <div class="small text-muted">{{ $setupItem['action'] }}</div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </section>
+
+        <section class="surface-card">
+            <div class="account-shell__header">
+                <div>
                     <p class="section-kicker">Operational Snapshot</p>
                     <h3 class="section-title">Ringkasan operasional hari ini</h3>
                     <div class="section-line"></div>

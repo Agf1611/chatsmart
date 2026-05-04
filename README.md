@@ -48,6 +48,8 @@ powershell -ExecutionPolicy Bypass -File tools\stop-chatsmart-sync-watcher.ps1
    - `APP_URL`
    - `DB_HOST`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`
    - `WA_URL_SERVER`
+   - `WA_URL_SERVER_PUBLIC`
+   - `WA_URL_SERVER_INTERNAL`
    - `AUTH`
    - `CORS_ALLOWED_ORIGINS`
 4. Pastikan `APP_INSTALLED=false` sebelum menjalankan installer pertama kali.
@@ -78,6 +80,7 @@ npm ci --omit=dev
 - Session WhatsApp sekarang default disimpan di `storage/app/wa-sessions`, jadi lebih aman untuk Linux hosting daripada folder root project.
 - Jalankan Node app dengan startup file `server.js`.
 - Aplikasi sudah mendukung environment `PORT` dari hosting.
+- Admin Settings sekarang punya deployment profile, preview konfigurasi, dan tombol test Node supaya setup hosting lebih mudah tanpa terminal.
 
 ## Setup Laravel
 
@@ -98,11 +101,17 @@ php artisan storage:link
 
 1. Buka `/install`
 2. Pilih `Mode Sederhana`
-3. Isi konfigurasi database yang sudah dibuat di panel hosting
-4. Buat akun admin
-5. Installer akan otomatis menjalankan migrasi database dan membuat install lock
-6. Login ke dashboard
-7. Segera ganti password admin
+3. Pilih deployment profile yang sesuai:
+   - `auto`
+   - `localhost`
+   - `hosting_same_domain`
+   - `hosting_remote_node`
+   - `self_hosted_tunnel`
+4. Isi konfigurasi database yang sudah dibuat di panel hosting
+5. Buat akun admin
+6. Installer akan otomatis menjalankan migrasi database dan membuat install lock
+7. Login ke dashboard
+8. Segera ganti password admin
 
 ## Catatan Penting
 

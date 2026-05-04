@@ -204,6 +204,10 @@
             font-size: 1.2rem;
             background: ghostwhite;
         }
+
+        .d-none {
+            display: none !important;
+        }
     </style>
 </head>
 
@@ -213,6 +217,11 @@
         <div class="ui one column grid">
 
             <div class="column">
+                @php
+                    $deploymentProfiles = $serverProfiles ?? [];
+                    $preview = $serverPreview ?? [];
+                    $selectedProfile = old('deployment_profile', $preview['deployment_profile'] ?? 'auto');
+                @endphp
                 @if ($errors->any())
                     @foreach ($errors->all() as $error)
                         <div class="ui negative fluid small message">
@@ -269,6 +278,55 @@
                                 </div>
 
                                 <div class="ui fluid segment bordered shadowless">
+                                    <div class="field">
+                                        <label>Deployment Profile</label>
+                                        <select name="deployment_profile" id="deployment_profile" class="ui fluid dropdown">
+                                            @foreach ($deploymentProfiles as $key => $profile)
+                                                <option value="{{ $key }}" {{ $selectedProfile === $key ? 'selected' : '' }}>
+                                                    {{ $profile['label'] }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <div class="field">
+                                        <label>App URL</label>
+                                        <input type="url" name="app_url" id="app_url" required value="{{ old('app_url', $preview['APP_URL'] ?? request()->root()) }}" placeholder="https://domainkamu.com">
+                                    </div>
+
+                                    <div class="field">
+                                        <label>Port Node</label>
+                                        <input type="number" name="portnode" id="portnode" required value="{{ old('portnode', $preview['PORT_NODE'] ?? 3100) }}">
+                                    </div>
+
+                                    <div class="field node-public-group">
+                                        <label>URL Node Publik</label>
+                                        <input type="url" name="urlnode" id="urlnode" value="{{ old('urlnode', $preview['WA_URL_SERVER'] ?? '') }}" placeholder="https://node.domainkamu.com">
+                                        <div class="ui tiny message">
+                                            Pakai URL publik jika Node berada di subdomain atau server terpisah.
+                                        </div>
+                                    </div>
+
+                                    <div class="field node-internal-group">
+                                        <label>URL Node Internal</label>
+                                        <input type="url" name="urlnode_internal" id="urlnode_internal" value="{{ old('urlnode_internal', $preview['WA_URL_SERVER_INTERNAL'] ?? '') }}" placeholder="http://127.0.0.1:3100">
+                                        <div class="ui tiny message">
+                                            Untuk server sendiri + Cloudflare Tunnel, isi dengan alamat internal Node.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="ui fluid blue message">
+                                    <div class="header mb-1">Preview Konfigurasi</div>
+                                    <ul class="mb-0">
+                                        <li><code>TYPE_SERVER</code>: <span id="preview_type">{{ $preview['TYPE_SERVER'] ?? 'auto' }}</span></li>
+                                        <li><code>WA_URL_SERVER</code>: <span id="preview_node">{{ $preview['WA_URL_SERVER'] ?? '-' }}</span></li>
+                                        <li><code>WA_URL_SERVER_INTERNAL</code>: <span id="preview_internal">{{ $preview['WA_URL_SERVER_INTERNAL'] ?? '-' }}</span></li>
+                                        <li><code>SESSION_SECURE_COOKIE</code>: <span id="preview_secure">{{ $preview['SESSION_SECURE_COOKIE'] ?? 'false' }}</span></li>
+                                    </ul>
+                                </div>
+
+                                <div class="ui fluid segment bordered shadowless">
                                     <div class="ui relaxed list">
                                         <div class="item">
                                             <i class="check teal icon"></i>
@@ -294,11 +352,9 @@
 
                                 <div class="ui fluid blue message">
                                     <div class="header mb-1">Auto Deteksi Server</div>
-                                    <p class="mb-0">Saat submit, installer akan otomatis mengisi konfigurasi dasar
-                                        server berdasarkan alamat instalasi saat ini. Jika dipasang di localhost/IP
-                                        lokal maka mode lokal akan dipakai. Jika dipasang di domain publik maka mode
-                                        hosting akan dipakai otomatis. Pengaturan ini tetap bisa diubah lagi dari menu
-                                        Admin jika nanti ingin memakai subdomain Node atau Cloudflare Tunnel.</p>
+                                    <p class="mb-0">Installer akan memakai preset yang kamu pilih di atas. Kalau diubah
+                                        ke domain publik atau Cloudflare Tunnel, parameter Node dan APP URL akan ikut
+                                        disesuaikan agar instalasi pertama kali lebih mulus.</p>
                                 </div>
                             </div>
 
@@ -552,6 +608,35 @@
                 return false;
             }
         })
+
+        const nodeUrlFields = $('.node-public-group, .node-internal-group');
+
+        function syncProfileFields() {
+            const profile = $('#deployment_profile').val();
+            const appUrl = $('#app_url').val();
+            const port = $('#portnode').val() || '3100';
+
+            const showNodeFields = profile === 'hosting_remote_node' || profile === 'self_hosted_tunnel';
+            nodeUrlFields.toggleClass('d-none', !showNodeFields);
+
+            if (profile === 'hosting_same_domain') {
+                $('#urlnode').val(appUrl);
+                $('#urlnode_internal').val(appUrl);
+            }
+
+            if (profile === 'localhost') {
+                $('#urlnode').val('http://127.0.0.1:' + port);
+                $('#urlnode_internal').val('http://127.0.0.1:' + port);
+            }
+
+            $('#preview_type').text(profile);
+            $('#preview_node').text($('#urlnode').val() || appUrl || '-');
+            $('#preview_internal').text($('#urlnode_internal').val() || appUrl || '-');
+            $('#preview_secure').text(appUrl.indexOf('https://') === 0 ? 'true' : 'false');
+        }
+
+        $('#deployment_profile, #app_url, #portnode').on('change keyup', syncProfileFields);
+        syncProfileFields();
     </script>
 </body>
 

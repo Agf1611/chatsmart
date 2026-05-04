@@ -54,72 +54,84 @@
                 <div class="tab-pane fade show active" id="server" role="tabpanel" aria-labelledby="account-tab">
                     <div class="card">
                         <div class="card-body">
-                            <div class="row">
-
-
-
-                                <div class="row m-t-lg">
-                                    <form action="{{ route('setServer') }}" method="POST">
+                            <div class="row g-4 align-items-start">
+                                <div class="col-lg-8">
+                                    <form action="{{ route('setServer') }}" method="POST" id="server-config-form">
                                         @csrf
-                                        <div class="col-md-6">
-                                            <label for="typeServer" class="form-label">Server Type</label>
-                                            <select name="typeServer" class="form-control" id="server" required>
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <label class="form-label">Deployment Profile</label>
+                                                <select name="deployment_profile" id="deployment_profile" class="form-control" required>
+                                                    @foreach ($serverProfiles as $key => $profile)
+                                                        <option value="{{ $key }}" {{ ($serverPreview['deployment_profile'] ?? 'auto') === $key ? 'selected' : '' }}>
+                                                            {{ $profile['label'] }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                                <small class="text-muted d-block mt-2">Pilih pola deploy yang paling sesuai agar app mengisi env otomatis tanpa terminal.</small>
+                                            </div>
 
-                                                @if (env('TYPE_SERVER') === 'localhost')
-                                                    <option value="localhost" selected>Localhost</option>
-                                                    <option value="hosting">Hosting Shared</option>
-                                                    <option value="other">Other</option>
-                                                @elseif(env('TYPE_SERVER') === 'hosting')
-                                                    <option value="localhost">Localhost</option>
-                                                    <option value="hosting" selected>Hosting Shared</option>
-                                                    <option value="other">Other</option>
-                                                @else
-                                                    <option value="other" required>Other</option>
-                                                    <option value="localhost">Localhost</option>
-                                                    <option value="hosting">Hosting Shared</option>
-                                                @endif
-                                            </select>
+                                            <div class="col-md-6">
+                                                <label class="form-label">App URL</label>
+                                                <input type="url" name="app_url" class="form-control" id="app_url" value="{{ $serverPreview['APP_URL'] ?? config('app.url') }}" required>
+                                            </div>
+
+                                            <div class="col-md-6">
+                                                <label for="Port" class="form-label">Port Node JS</label>
+                                                <input type="number" name="portnode" class="form-control" id="portnode"
+                                                    value="{{ $serverPreview['PORT_NODE'] ?? env('PORT_NODE') }}" min="1" max="65535" required>
+                                            </div>
+
+                                            <div class="col-md-6 node-public-group">
+                                                <label class="form-label">URL Node Publik</label>
+                                                <input type="url" class="form-control" value="{{ $serverPreview['WA_URL_SERVER'] ?? env('WA_URL_SERVER') }}" name="urlnode" id="urlnode">
+                                                <small class="text-muted d-block mt-2">
+                                                    Gunakan subdomain Node publik jika Laravel dan Node dipisah.
+                                                </small>
+                                            </div>
+
+                                            <div class="col-md-6 node-internal-group">
+                                                <label class="form-label">URL Node Internal</label>
+                                                <input type="url" class="form-control" value="{{ $serverPreview['WA_URL_SERVER_INTERNAL'] ?? env('WA_URL_SERVER_INTERNAL') }}" name="urlnode_internal" id="urlnode_internal">
+                                                <small class="text-muted d-block mt-2">
+                                                    Untuk server sendiri atau Cloudflare Tunnel, ini dipakai dari sisi Laravel/PHP.
+                                                </small>
+                                            </div>
+
+                                            <div class="col-12">
+                                                <div class="alert alert-light border mb-0">
+                                                    <div class="fw-semibold mb-2">Preview konfigurasi aktif</div>
+                                                    <div class="row g-2 small">
+                                                        <div class="col-md-6"><strong>TYPE_SERVER:</strong> <span id="preview_type">{{ $serverPreview['TYPE_SERVER'] ?? 'auto' }}</span></div>
+                                                        <div class="col-md-6"><strong>WA_URL_SERVER:</strong> <span id="preview_node">{{ $serverPreview['WA_URL_SERVER'] ?? '-' }}</span></div>
+                                                        <div class="col-md-6"><strong>WA_URL_SERVER_INTERNAL:</strong> <span id="preview_internal">{{ $serverPreview['WA_URL_SERVER_INTERNAL'] ?? '-' }}</span></div>
+                                                        <div class="col-md-6"><strong>SESSION_SECURE_COOKIE:</strong> <span id="preview_secure">{{ $serverPreview['SESSION_SECURE_COOKIE'] ?? 'false' }}</span></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="col-12 d-flex gap-2 flex-wrap mt-2">
+                                                <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                                                <button type="button" class="btn btn-outline-primary btn-sm" id="test-server-btn">Test Node</button>
+                                            </div>
                                         </div>
-                                        <div class="col-md-6">
-                                            <label for="Port" class="form-label">Port Node JS</label>
-                                            <input type="number" name="portnode" class="form-control" id="Port"
-                                                value="{{ env('PORT_NODE') }}" required>
-                                        </div>
+                                    </form>
                                 </div>
-                                <div
-                                    class="row m-t-lg {{ env('TYPE_SERVER') === 'other' ? 'd-block' : 'd-none' }} formUrlNode">
-                                    <div class="col-md-6">
-                                        <label for="settingsInputUserName " class="form-label">URL Node</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text" id="settingsInputUserName-add">URL</span>
-                                            <input type="text" class="form-control"
-                                                value="{{ env('WA_URL_SERVER') }}" name="urlnode"
-                                                id="settingsInputUserName" aria-describedby="settingsInputUserName-add">
-                                        </div>
-                                        <small class="text-muted d-block mt-2">
-                                            Isi hanya jika runtime Node memakai domain atau subdomain terpisah, misalnya
-                                            <code>https://node.domainkamu.com</code>. Jangan isi URL dashboard Laravel di sini.
-                                        </small>
+
+                                <div class="col-lg-4">
+                                    <div class="alert alert-info border mb-3">
+                                        <div class="fw-semibold mb-1">Panduan Cepat</div>
+                                        <ul class="mb-0 ps-3">
+                                            <li><code>localhost</code> untuk XAMPP/dev.</li>
+                                            <li><code>hosting_same_domain</code> jika web dan Node diproxy lewat domain yang sama.</li>
+                                            <li><code>hosting_remote_node</code> jika Node hidup di subdomain/server lain.</li>
+                                            <li><code>self_hosted_tunnel</code> jika Node dipublish via Cloudflare Tunnel.</li>
+                                        </ul>
                                     </div>
-
-                                </div>
-                                <div class="row m-t-lg formHostingHint {{ env('TYPE_SERVER') === 'hosting' ? 'd-block' : 'd-none' }}">
-                                    <div class="col-md-8">
-                                        <div class="alert alert-light border mb-0">
-                                            Mode <strong>Hosting Shared</strong> akan memakai domain website yang sama
-                                            untuk Socket.IO dan endpoint Node, seperti paket hosting lama. Anda tidak
-                                            perlu mengisi URL Node terpisah.
-                                        </div>
+                                    <div class="alert alert-secondary border mb-0" id="server-test-result">
+                                        Status test Node akan tampil di sini.
                                     </div>
                                 </div>
-
-                                <div class="row m-t-lg ">
-                                    <div class="col mt-4">
-
-                                        <button type="submit" class="btn btn-primary btn-sm">Update</button>
-                                    </div>
-                                </div>
-                                </form>
                             </div>
                         </div>
                     </div>
@@ -231,20 +243,67 @@
 
 
     <script>
-        $('#server').on('change', function() {
-            let type = $('#server :selected').val();
-            if (type === 'other') {
-                $('.formUrlNode').removeClass('d-none')
-            } else {
-                $('.formUrlNode').addClass('d-none')
+        const syncServerProfile = () => {
+            const profile = $('#deployment_profile').val();
+            const appUrl = $('#app_url').val();
+            const port = $('#portnode').val() || '3100';
+            const showNodeFields = profile === 'hosting_remote_node' || profile === 'self_hosted_tunnel';
+
+            $('.node-public-group, .node-internal-group').toggleClass('d-none', !showNodeFields);
+
+            if (profile === 'hosting_same_domain') {
+                $('#urlnode').val(appUrl);
+                $('#urlnode_internal').val(appUrl);
             }
 
-            if (type === 'hosting') {
-                $('.formHostingHint').removeClass('d-none')
-            } else {
-                $('.formHostingHint').addClass('d-none')
-
+            if (profile === 'localhost') {
+                $('#urlnode').val('http://127.0.0.1:' + port);
+                $('#urlnode_internal').val('http://127.0.0.1:' + port);
             }
-        })
+
+            $('#preview_type').text(profile);
+            $('#preview_node').text($('#urlnode').val() || appUrl || '-');
+            $('#preview_internal').text($('#urlnode_internal').val() || appUrl || '-');
+            $('#preview_secure').text(appUrl.indexOf('https://') === 0 ? 'true' : 'false');
+        };
+
+        $('#deployment_profile, #app_url, #portnode').on('change keyup', syncServerProfile);
+        syncServerProfile();
+
+        $('#test-server-btn').on('click', function() {
+            const $btn = $(this);
+            $btn.prop('disabled', true).text('Testing...');
+
+            $.ajax({
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                url: '{{ route('settings.server.test') }}',
+                data: {
+                    deployment_profile: $('#deployment_profile').val(),
+                    app_url: $('#app_url').val(),
+                    portnode: $('#portnode').val(),
+                    urlnode: $('#urlnode').val(),
+                    urlnode_internal: $('#urlnode_internal').val(),
+                },
+                success: function(response) {
+                    const lines = [];
+                    lines.push(`Profile: ${response.profile}`);
+                    (response.tests || []).forEach((item) => {
+                        const status = item.healthy ? 'OK' : 'FAIL';
+                        lines.push(`${status} ${item.target}${item.status ? ' (HTTP ' + item.status + ')' : ''}${item.error ? ' - ' + item.error : ''}`);
+                    });
+                    $('#server-test-result').removeClass('alert-secondary alert-success alert-danger').addClass('alert-success').html(lines.join('<br>'));
+                },
+                error: function(xhr) {
+                    const message = xhr.responseJSON?.message || 'Test Node gagal dijalankan.';
+                    $('#server-test-result').removeClass('alert-secondary alert-success alert-danger').addClass('alert-danger').text(message);
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).text('Test Node');
+                }
+            });
+        });
     </script>
 </x-layout-dashboard>

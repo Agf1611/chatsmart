@@ -25,6 +25,7 @@ class OperationalHealthService
             'health' => $health,
             'metrics' => $metrics,
             'alerts' => $this->buildAlerts($health, $metrics, $selectedDevice),
+            'setup' => $this->buildSetupChecklist($user, $metrics, $health),
         ];
     }
 
@@ -188,6 +189,57 @@ class OperationalHealthService
         }
 
         return $alerts;
+    }
+
+    protected function buildSetupChecklist(?User $user, array $metrics, array $health): array
+    {
+        $profile = inferDeploymentProfileFromEnv();
+        $items = [
+            [
+                'label' => 'Laravel Web',
+                'status' => $health['laravel']['status'] === 'healthy' ? 'done' : 'pending',
+                'message' => $health['laravel']['message'],
+                'action' => 'Pastikan `.env`, `storage/`, dan `bootstrap/cache` writable.',
+            ],
+            [
+                'label' => 'Database',
+                'status' => $health['database']['status'] === 'healthy' ? 'done' : 'pending',
+                'message' => $health['database']['message'],
+                'action' => 'Siapkan database MySQL/MariaDB dan cek koneksi installer.',
+            ],
+            [
+                'label' => 'Node Runtime',
+                'status' => $health['node']['status'] === 'healthy' ? 'done' : 'pending',
+                'message' => $health['node']['message'],
+                'action' => 'Jalankan Node, cek port, lalu pastikan Socket.IO membalas `sid`.',
+            ],
+            [
+                'label' => 'Device Added',
+                'status' => $user && $user->devices()->exists() ? 'done' : 'pending',
+                'message' => $user && $user->devices()->exists() ? 'Minimal satu device sudah dibuat.' : 'Belum ada device yang terdaftar.',
+                'action' => 'Tambahkan device pertama dari dashboard untuk mulai scan QR/pairing code.',
+            ],
+            [
+                'label' => 'Active Connection',
+                'status' => $metrics['connected_devices'] > 0 ? 'done' : 'pending',
+                'message' => $metrics['connected_devices'] > 0 ? 'Ada device yang sudah connected.' : 'Belum ada device connected.',
+                'action' => 'Scan QR atau pairing code sampai status connected.',
+            ],
+            [
+                'label' => 'API Key',
+                'status' => $user && !empty($user->api_key) ? 'done' : 'pending',
+                'message' => $user && !empty($user->api_key) ? 'API key user sudah tersedia.' : 'API key user masih kosong.',
+                'action' => 'Gunakan API key untuk integrasi endpoint dan webhook.',
+            ],
+            [
+                'label' => 'Deployment Profile',
+                'status' => 'info',
+                'message' => 'Preset aktif: ' . $profile,
+                'action' => 'Buka Admin Settings jika perlu pindah mode instalasi.',
+            ],
+        ];
+
+        return $items;
     }
 
     protected function checkLaravel(): array

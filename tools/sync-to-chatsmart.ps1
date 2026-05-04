@@ -47,7 +47,9 @@ $excludeFiles = @(
     '.env',
     '.env.backup',
     '.DS_Store',
-    'sickas_rules_snapshot.txt'
+    'sickas_rules_snapshot.txt',
+    '*.zip',
+    'wagethosting.zip'
 )
 
 $roboArgs = @(
@@ -139,6 +141,10 @@ $targetCleanupDirs = @(
 
 foreach ($cleanupDir in $targetCleanupDirs) {
     Remove-TargetPathIfExists -Path $cleanupDir
+}
+
+Get-ChildItem -LiteralPath $targetFull -Recurse -Force -File -Filter '*.zip' | ForEach-Object {
+    Remove-Item -LiteralPath $_.FullName -Force
 }
 
 $targetRuntimeDirs = @(
