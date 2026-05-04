@@ -398,7 +398,7 @@
                                 </div>
                                 <div class="col-12">
                                     <div class="alert border-0 bg-light-info mb-0">
-                                        AI reply hanya memproses pesan teks di V1. Media dari user akan diabaikan dengan log.
+                                        AI reply hanya memproses pesan teks di V1. Media dari user akan diabaikan dengan log. Jika tidak ada keyword yang cocok, bot AI aktif terbaru per device bisa dipakai sebagai default.
                                     </div>
                                 </div>
                                 <div class="col-12">

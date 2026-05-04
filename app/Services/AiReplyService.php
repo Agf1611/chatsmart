@@ -19,17 +19,24 @@ class AiReplyService
             return $this->silent('AI bot disabled globally.');
         }
 
-        $rule = Autoreply::with(['aiBot', 'device', 'user'])->find($payload['matched_rule_id']);
-        if (!$rule || $rule->type !== 'ai' || !$rule->aiBot) {
+        $target = $this->resolveAiTarget($payload);
+        $rule = $target['rule'];
+        $bot = $target['bot'];
+        $source = $target['source'];
+
+        if (!$bot) {
             return $this->silent('AI rule or bot profile not found.');
         }
 
-        $bot = $rule->aiBot;
         if ($bot->status !== 'active') {
             return $this->fallback($bot, 'AI bot profile is inactive.');
         }
 
-        if ((int) $bot->device_id !== (int) $rule->device_id || (string) $payload['device_body'] !== (string) optional($rule->device)->body) {
+        $expectedDeviceBody = $rule
+            ? (string) optional($rule->device)->body
+            : (string) optional($bot->device)->body;
+
+        if ($expectedDeviceBody === '' || (string) $payload['device_body'] !== $expectedDeviceBody) {
             return $this->fallback($bot, 'AI bot device mismatch.');
         }
 
@@ -38,13 +45,14 @@ class AiReplyService
             return $this->silent('Empty text input for AI bot.');
         }
 
-        $conversation = $this->findOrCreateConversation($bot, $rule, $payload);
+        $conversation = $this->findOrCreateConversation($bot, $rule, $payload, $source);
         $this->storeConversationMessage($conversation, 'user', $incomingText, [
             'provider' => $bot->engine_type,
             'whatsapp_message_id' => $payload['whatsapp_message_id'] ?? null,
             'meta' => [
                 'push_name' => $payload['push_name'] ?? '',
                 'context_type' => $payload['context_type'] ?? 'personal',
+                'source' => $source,
             ],
         ]);
 
@@ -62,7 +70,7 @@ class AiReplyService
         if (!$providerResult['success']) {
             $this->storeConversationMessage($conversation, 'event', $providerResult['message'], [
                 'provider' => $bot->engine_type,
-                'meta' => ['status' => 'failed'],
+                'meta' => ['status' => 'failed', 'source' => $source],
             ]);
 
             return $this->fallback($bot, $providerResult['message']);
@@ -79,6 +87,7 @@ class AiReplyService
             'meta' => [
                 'model' => $bot->model,
                 'thinking_mode' => $bot->thinking_mode,
+                'source' => $source,
             ],
         ]);
 
@@ -95,7 +104,8 @@ class AiReplyService
                 'text' => $assistantText,
             ],
             'mode' => 'text',
-            'message' => 'AI reply generated.',
+            'message' => $source === 'default_ai' ? 'AI default reply generated.' : 'AI reply generated.',
+            'source' => $source,
         ];
     }
 
@@ -133,7 +143,64 @@ class AiReplyService
         ];
     }
 
-    protected function findOrCreateConversation(AiBot $bot, Autoreply $rule, array $payload): AiConversation
+    protected function resolveAiTarget(array $payload): array
+    {
+        $matchedRuleId = (int) ($payload['matched_rule_id'] ?? 0);
+        if ($matchedRuleId > 0) {
+            $rule = Autoreply::with(['aiBot', 'device', 'user'])->find($matchedRuleId);
+
+            if (!$rule || $rule->type !== 'ai' || !$rule->aiBot) {
+                return [
+                    'rule' => null,
+                    'bot' => null,
+                    'source' => 'rule',
+                ];
+            }
+
+            return [
+                'rule' => $rule,
+                'bot' => $rule->aiBot->loadMissing('device'),
+                'source' => 'rule',
+            ];
+        }
+
+        $botId = (int) ($payload['bot_id'] ?? 0);
+        if ($botId > 0) {
+            $bot = AiBot::with('device')->find($botId);
+            return [
+                'rule' => null,
+                'bot' => $bot,
+                'source' => 'default_ai',
+            ];
+        }
+
+        $deviceBody = trim((string) ($payload['device_body'] ?? ''));
+        if ($deviceBody !== '') {
+            $bot = AiBot::with('device')
+                ->where('status', 'active')
+                ->whereHas('device', function ($query) use ($deviceBody) {
+                    $query->where('body', $deviceBody);
+                })
+                ->orderByDesc('updated_at')
+                ->first();
+
+            if ($bot) {
+                return [
+                    'rule' => null,
+                    'bot' => $bot,
+                    'source' => 'default_ai',
+                ];
+            }
+        }
+
+        return [
+            'rule' => null,
+            'bot' => null,
+            'source' => 'unknown',
+        ];
+    }
+
+    protected function findOrCreateConversation(AiBot $bot, ?Autoreply $rule, array $payload, string $source): AiConversation
     {
         $conversation = AiConversation::firstOrCreate(
             [
@@ -142,7 +209,7 @@ class AiReplyService
                 'chat_jid' => $payload['chat_jid'],
             ],
             [
-                'user_id' => $rule->user_id,
+                'user_id' => $rule ? $rule->user_id : $bot->user_id,
                 'contact_name' => $payload['push_name'] ?? null,
                 'context_type' => $payload['context_type'] ?? 'personal',
                 'status' => 'active',
@@ -155,6 +222,9 @@ class AiReplyService
             'context_type' => $payload['context_type'] ?? $conversation->context_type,
             'last_user_message' => trim((string) ($payload['incoming_text'] ?? '')),
             'last_message_at' => now(),
+            'short_summary' => $source === 'default_ai' && !$conversation->short_summary
+                ? 'Default AI conversation for this device.'
+                : $conversation->short_summary,
         ]);
 
         return $conversation->fresh();

@@ -225,7 +225,7 @@
                     </div>
                     <div class="card-body pt-3">
                         <div class="smart-panel-note mb-3">
-                            Untuk V1, input yang diproses hanya pesan teks. Media dari user tetap diabaikan dan dicatat di log.
+                            Untuk V1, input yang diproses hanya pesan teks. Media dari user tetap diabaikan dan dicatat di log. AI reply dapat dipakai sebagai rule khusus atau bot default per device.
                         </div>
                         <div class="smart-kpi-grid mb-3">
                             <div class="smart-kpi">

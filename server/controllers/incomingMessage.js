@@ -7,6 +7,7 @@ const {
   hasIncomingMessageLog,
   saveIncomingMessageLog,
   getUrlWebhook,
+  getActiveAiBotForDevice,
   getRegisteredPhonebookIdsForNumber,
   isContactPaused,
   pauseContactForOperator,
@@ -428,7 +429,7 @@ function isTextLikeMessage(messageType, command) {
   return supportedTypes.includes(messageType) && String(command || "").trim() !== "";
 }
 
-async function requestInternalAiReply({ matchedReply, message, command, participant, pushName, deviceBody }) {
+async function requestInternalAiReply({ matchedReply, botId, aiRoute, message, command, participant, pushName, deviceBody }) {
   const appUrl = process.env.APP_URL;
   const internalToken = process.env.AI_INTERNAL_TOKEN || process.env.APP_KEY;
 
@@ -446,8 +447,9 @@ async function requestInternalAiReply({ matchedReply, message, command, particip
         participant,
         push_name: pushName,
         incoming_text: command,
-        matched_rule_id: matchedReply.id,
-        bot_id: matchedReply.ai_bot_id || matchedReply.reply?.ai_bot_id,
+        matched_rule_id: matchedReply ? matchedReply.id : null,
+        bot_id: botId || matchedReply?.ai_bot_id || matchedReply?.reply?.ai_bot_id || null,
+        ai_route: aiRoute || (matchedReply ? "rule" : "default"),
         context_type: message.key.remoteJid.includes("@g.us") ? "group" : "personal",
         whatsapp_message_id: message.key.id,
       },
@@ -560,6 +562,7 @@ const IncomingMessage = async (upsert, sock) => {
 
     let shouldQuote = false;
     let replyPayload;
+    let replySource = "webhook";
 
     const firstChatReplies = isFirstChat ? await getFirstChatRules(deviceBody) : [];
     const matchedFirstChatReply = isFirstChat
@@ -572,6 +575,9 @@ const IncomingMessage = async (upsert, sock) => {
       ? await pickEligibleReply(containReply, message.key.remoteJid, senderNumber)
       : null;
     const matchedReply = matchedFirstChatReply || matchedEqualReply || matchedContainReply;
+    const defaultAiBot = !matchedReply && isTextLikeMessage(messageType, command)
+      ? await getActiveAiBotForDevice(deviceBody)
+      : null;
 
     console.log("[autoreply] incoming", {
       deviceBody,
@@ -583,6 +589,7 @@ const IncomingMessage = async (upsert, sock) => {
       matchedFirstChat: Boolean(matchedFirstChatReply),
       matchedEqual: Boolean(matchedEqualReply),
       matchedContain: Boolean(matchedContainReply),
+      defaultAiBot: defaultAiBot ? { id: defaultAiBot.id, name: defaultAiBot.name } : null,
     });
 
     if (matchedReply) {
@@ -600,6 +607,8 @@ const IncomingMessage = async (upsert, sock) => {
 
         const aiResponse = await requestInternalAiReply({
           matchedReply,
+          botId: matchedReply.ai_bot_id || matchedReply.reply?.ai_bot_id,
+          aiRoute: "rule",
           message,
           command,
           participant,
@@ -616,8 +625,10 @@ const IncomingMessage = async (upsert, sock) => {
           });
           return;
         }
+        replySource = "rule_ai";
       } else {
         replyPayload = normalizeWebhookResponse(matchedReply.reply);
+        replySource = "rule";
       }
 
       console.log("[autoreply] matched-rule", {
@@ -628,25 +639,64 @@ const IncomingMessage = async (upsert, sock) => {
         shouldQuote,
       });
     } else {
-      const webhookUrl = await getUrlWebhook(deviceBody);
-      if (!webhookUrl) {
-        console.log("[autoreply] no-match-no-webhook", { deviceBody, command });
-        await saveIncomingMessageLog(deviceBody, chatIdentity);
-        return;
+      if (defaultAiBot) {
+        console.log("[ai-bot] default-bot-selected", {
+          deviceBody,
+          botId: defaultAiBot.id,
+          botName: defaultAiBot.name,
+        });
+
+        const aiResponse = await requestInternalAiReply({
+          matchedReply: null,
+          botId: defaultAiBot.id,
+          aiRoute: "default",
+          message,
+          command,
+          participant,
+          pushName,
+          deviceBody,
+        });
+
+        replyPayload = aiResponse?.reply || null;
+        if (replyPayload) {
+          replySource = "default_ai";
+          console.log("[ai-bot] default-reply", {
+            deviceBody,
+            botId: defaultAiBot.id,
+            message: aiResponse?.message || "ok",
+          });
+        } else {
+          console.log("[ai-bot] default-no-reply", {
+            deviceBody,
+            botId: defaultAiBot.id,
+            message: aiResponse?.message || "silent",
+          });
+        }
       }
 
-      const webhookReply = await sendWebhook({
-        command,
-        bufferImage,
-        from,
-        url: webhookUrl,
-        participant,
-      });
-
-      replyPayload = normalizeWebhookResponse(webhookReply);
       if (!replyPayload) {
-        await saveIncomingMessageLog(deviceBody, chatIdentity);
-        return;
+        const webhookUrl = await getUrlWebhook(deviceBody);
+        if (!webhookUrl) {
+          console.log("[autoreply] no-match-no-webhook", { deviceBody, command, defaultAiBot: Boolean(defaultAiBot) });
+          await saveIncomingMessageLog(deviceBody, chatIdentity);
+          return;
+        }
+
+        const webhookReply = await sendWebhook({
+          command,
+          bufferImage,
+          from,
+          url: webhookUrl,
+          participant,
+        });
+
+        replyPayload = normalizeWebhookResponse(webhookReply);
+        if (!replyPayload) {
+          await saveIncomingMessageLog(deviceBody, chatIdentity);
+          return;
+        }
+
+        replySource = "webhook";
       }
 
       shouldQuote = Boolean(replyPayload?.quoted);
@@ -675,7 +725,9 @@ const IncomingMessage = async (upsert, sock) => {
       "success",
       matchedReply
         ? `Auto reply: ${matchedReply.name || matchedReply.keyword || matchedReply.type} | transport=${transportDecision.policy}:${transportDecision.mode}`
-        : `Webhook auto reply | transport=${transportDecision.mode}`
+        : replySource === "default_ai"
+          ? `AI default auto reply | transport=${transportDecision.policy}:${transportDecision.mode}`
+          : `Webhook auto reply | transport=${transportDecision.mode}`
     );
 
     if (shouldPauseForOperatorHandoff(matchedReply, command)) {
@@ -697,6 +749,7 @@ const IncomingMessage = async (upsert, sock) => {
     console.log("[autoreply] reply-sent", {
       deviceBody,
       command,
+      source: replySource,
       transportPolicy: transportDecision.policy,
       transportMode: transportDecision.mode,
       type:

@@ -25,10 +25,11 @@ class InternalAiController extends Controller
             'participant' => ['nullable', 'string'],
             'push_name' => ['nullable', 'string'],
             'incoming_text' => ['nullable', 'string'],
-            'matched_rule_id' => ['required', 'integer'],
-            'bot_id' => ['required', 'integer'],
+            'matched_rule_id' => ['nullable', 'integer'],
+            'bot_id' => ['nullable', 'integer'],
             'context_type' => ['required', 'in:personal,group'],
             'whatsapp_message_id' => ['nullable', 'string'],
+            'ai_route' => ['nullable', 'in:rule,default'],
         ]);
 
         $result = $this->aiReplyService->respondToIncoming($payload);

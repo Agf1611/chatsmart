@@ -129,6 +129,28 @@ async function getUrlWebhook(deviceBody) {
   return webhook;
 }
 
+async function getActiveAiBotForDevice(deviceBody) {
+  const cacheKey = `active-ai-bot:${deviceBody}`;
+  if (myCache.has(cacheKey)) {
+    return myCache.get(cacheKey);
+  }
+
+  const rows = await dbQuery(
+    `SELECT ai_bots.*
+     FROM ai_bots
+     INNER JOIN devices ON devices.id = ai_bots.device_id
+     WHERE devices.body = ?
+       AND ai_bots.status = 'active'
+     ORDER BY ai_bots.updated_at DESC
+     LIMIT 1`,
+    [deviceBody]
+  );
+
+  const bot = rows.length > 0 ? rows[0] : null;
+  myCache.set(cacheKey, bot);
+  return bot;
+}
+
 async function getRegisteredPhonebookIdsForNumber(userId, senderNumber) {
   const normalizedNumber = normalizePhoneNumber(senderNumber);
   const cacheKey = `registered-phonebooks:${userId}:${normalizedNumber}`;
@@ -302,6 +324,7 @@ module.exports = {
   hasIncomingMessageLog,
   saveIncomingMessageLog,
   getUrlWebhook,
+  getActiveAiBotForDevice,
   getRegisteredPhonebookIdsForNumber,
   isContactPaused,
   pauseContactForOperator,
