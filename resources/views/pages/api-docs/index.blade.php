@@ -1,4 +1,7 @@
 <x-layout-dashboard title="API Docs">
+    @php
+        $isAdmin = Auth::user()->level === 'admin';
+    @endphp
 
     {{-- <link href="{{asset('plugins/datatables/datatables.min.css')}}" rel="stylesheet"> --}}
     {{-- <link href="{{asset('plugins/select2/css/select2.css')}}" rel="stylesheet"> --}}
@@ -32,6 +35,13 @@
 
     {{-- API DOCUMENTATION --}}
     <div class="container-fluid">
+        @unless ($isAdmin)
+            <div class="alert alert-info border-0 bg-light-info">
+                <strong>Dokumentasi ringkas untuk user.</strong> Halaman ini hanya menampilkan endpoint utama yang
+                biasanya dibutuhkan untuk menghubungkan API ke aplikasi Anda sendiri: kirim pesan, kirim media,
+                generate QR, disconnect device, dan webhook.
+            </div>
+        @endunless
         <div class="row flex-wrap">
             <div class="col-lg-3 mb-4">
                 <ul class="nav nav-tabs flex-column w-100 mt-4 " role="tablist">
@@ -50,40 +60,38 @@
                             </div>
                         </a>
                     </li>
-                    <li class="nav-item" role="presentation">
-                        <a class="nav-link " data-bs-toggle="tab" href="#sendpoll" role="tab" aria-selected="true">
-                            <div class="d-flex align-items-center">
-                                <div class="tab-title">Send Poll Message</div>
-                            </div>
-                        </a>
-                    </li>
-                    {{-- send button --}}
-                    <li class="nav-item" role="presentation">
-                        <a class="nav-link " data-bs-toggle="tab" href="#sendbutton" role="tab"
-                            aria-selected="true">
-                            <div class="d-flex align-items-center">
-                                <div class="tab-title">Send Button</div>
-                            </div>
-                        </a>
-                    </li>
-                    {{-- Send Template --}}
-                    <li class="nav-item" role="presentation">
-                        <a class="nav-link " data-bs-toggle="tab" href="#sendtemplate" role="tab"
-                            aria-selected="true">
-                            <div class="d-flex align-items-center">
-                                <div class="tab-title">Send Template Button</div>
-                            </div>
-                        </a>
-                    </li>
-                    {{-- Send list --}}
-                    <li class="nav-item" role="presentation">
-                        <a class="nav-link " data-bs-toggle="tab" href="#sendlist" role="tab" aria-selected="true">
-                            <div class="d-flex align-items-center">
-
-                                <div class="tab-title">Send List Message</div>
-                            </div>
-                        </a>
-                    </li>
+                    @if ($isAdmin)
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link " data-bs-toggle="tab" href="#sendpoll" role="tab" aria-selected="true">
+                                <div class="d-flex align-items-center">
+                                    <div class="tab-title">Send Poll Message</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link " data-bs-toggle="tab" href="#sendbutton" role="tab"
+                                aria-selected="true">
+                                <div class="d-flex align-items-center">
+                                    <div class="tab-title">Send Button</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link " data-bs-toggle="tab" href="#sendtemplate" role="tab"
+                                aria-selected="true">
+                                <div class="d-flex align-items-center">
+                                    <div class="tab-title">Send Template Button</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link " data-bs-toggle="tab" href="#sendlist" role="tab" aria-selected="true">
+                                <div class="d-flex align-items-center">
+                                    <div class="tab-title">Send List Message</div>
+                                </div>
+                            </a>
+                        </li>
+                    @endif
 
                     {{-- Generate QR Code --}}
                     <li class="nav-item" role="presentation">
@@ -125,17 +133,15 @@
                     {{-- end send message --}}
                     {{-- send media --}}
                     @include('pages.api-docs.send-media')
-                    @include('pages.api-docs.send-poll')
+                    @if ($isAdmin)
+                        @include('pages.api-docs.send-poll')
+                    @endif
                     {{-- end send media --}}
-                    {{-- send button --}}
-                    @include('pages.api-docs.send-button')
-                    {{-- end send button --}}
-                    {{-- send template --}}
-                    @include('pages.api-docs.send-template')
-                    {{-- end send template --}}
-                    {{-- send list --}}
-                    @include('pages.api-docs.send-list')
-                    {{-- end send list --}}
+                    @if ($isAdmin)
+                        @include('pages.api-docs.send-button')
+                        @include('pages.api-docs.send-template')
+                        @include('pages.api-docs.send-list')
+                    @endif
 
                     {{-- generate qr code --}}
                     @include('pages.api-docs.generateqr')
