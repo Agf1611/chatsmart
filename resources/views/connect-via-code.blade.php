@@ -2,16 +2,16 @@
 
     <h4 class="">Whatsapp Account {{ $number->body }}</h4>
 
-
-
-    <div class="alert border-0 bg-light-info alert-dismissible fade show py-2">
+    <div class="alert border-0 {{ $number->status === 'Connected' ? 'bg-light-success' : 'bg-light-info' }} alert-dismissible fade show py-2 connection-summary">
         <div class="d-flex align-items-center">
-            <div class="fs-3 text-info">
+            <div class="fs-3 {{ $number->status === 'Connected' ? 'text-success' : 'text-info' }} connection-summary-icon">
                 {{-- icon info --}}
-                <i class="bi bi-info-circle-fill"></i>
+                <i class="bi {{ $number->status === 'Connected' ? 'bi-check-circle-fill' : 'bi-info-circle-fill' }}"></i>
             </div>
             <div class="ms-3">
-                <div class="text-info">Dont leave your phone before connencted</div>
+                <div class="{{ $number->status === 'Connected' ? 'text-success' : 'text-info' }} connection-summary-text">
+                    {{ $number->status === 'Connected' ? 'WhatsApp already connected successfully.' : 'Dont leave your phone before connencted' }}
+                </div>
             </div>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -68,6 +68,7 @@
                                     <li class="list-group-item name">Nama : </li>
                                     <li class="list-group-item number">Nomor : </li>
                                     <li class="list-group-item device">Device : </li>
+                                    <li class="list-group-item connection-state">Status : {{ $number->status ?: 'Waiting' }}</li>
 
                                 </ul>
                                 {{-- <div class="card bg-dark text-white">
@@ -113,26 +114,65 @@
             reconnection: true,
             reconnectionAttempts: 5,
         });
+        let isConnected = {{ $number->status === 'Connected' ? 'true' : 'false' }};
+
+        function renderStatus(variant, text) {
+            const icon = variant === 'success'
+                ? 'bi-check-circle-fill'
+                : (variant === 'danger'
+                    ? 'bi-x-circle-fill'
+                    : (variant === 'warning' ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill'));
+
+            $('.statusss').html(`
+                <button class="btn btn-${variant}" type="button" disabled>
+                    <i class="bi ${icon} me-1"></i>
+                    ${text}
+                </button>
+            `);
+        }
+
+        function renderSummary(variant, text) {
+            const wrapperClass = variant === 'success' ? 'bg-light-success' : (variant === 'danger' ? 'bg-light-danger' : 'bg-light-info');
+            const textClass = variant === 'success' ? 'text-success' : (variant === 'danger' ? 'text-danger' : 'text-info');
+            const icon = variant === 'success' ? 'bi-check-circle-fill' : (variant === 'danger' ? 'bi-x-circle-fill' : 'bi-info-circle-fill');
+
+            $('.connection-summary')
+                .removeClass('bg-light-success bg-light-danger bg-light-info')
+                .addClass(wrapperClass);
+            $('.connection-summary-icon')
+                .removeClass('text-success text-danger text-info')
+                .addClass(textClass)
+                .html(`<i class="bi ${icon}"></i>`);
+            $('.connection-summary-text')
+                .removeClass('text-success text-danger text-info')
+                .addClass(textClass)
+                .text(text);
+        }
+
+        function renderConnectionState(text) {
+            $('.connection-state').html(`Status : ${text}`);
+        }
 
         socket.on('connect', () => {
-            $('.statusss').html(`  <button class="btn btn-info" type="button" disabled>
-                                                    <span class="" role="status" aria-hidden="true"></span>
-                                                   Terhubung ke runtime Node, menunggu pairing code...
-                                                </button>`);
+            if (!isConnected) {
+                renderStatus('info', 'Terhubung ke runtime Node, menunggu pairing code...');
+                renderSummary('info', 'Runtime Node aktif. Tunggu kode pairing lalu masukkan ke WhatsApp Anda.');
+                renderConnectionState('Waiting for pairing code');
+            }
         });
 
         socket.on('connect_error', (error) => {
-            $('.statusss').html(`  <button class="btn btn-danger" type="button" disabled>
-                                                    <span class="" role="status" aria-hidden="true"></span>
-                                                   Gagal konek ke Node (${socketEndpoint}): ${error.message}
-                                                </button>`);
+            isConnected = false;
+            renderStatus('danger', `Gagal konek ke Node (${socketEndpoint}): ${error.message}`);
+            renderSummary('danger', 'Runtime Node tidak bisa dihubungi. Periksa server Node atau konfigurasi URL.');
+            renderConnectionState('Node unreachable');
         });
 
         socket.on('disconnect', (reason) => {
-            $('.statusss').html(`  <button class="btn btn-warning" type="button" disabled>
-                                                    <span class="" role="status" aria-hidden="true"></span>
-                                                   Koneksi Node terputus: ${reason}
-                                                </button>`);
+            if (!isConnected) {
+                renderStatus('warning', `Koneksi Node terputus: ${reason}`);
+                renderConnectionState('Disconnected');
+            }
         });
 
 
@@ -143,13 +183,12 @@
             message
         }) => {
             if (token == device) {
+                isConnected = false;
                 let code = data
                 $('.imageee').html(` <h2 >${code}</h2>`)
-                let count = 0;
-                $('.statusss').html(`  <button class="btn btn-warning" type="button" disabled>
-                                                     <span class="" role="status" aria-hidden="true"></span>
-                                                   ${message}
-                                                 </button>`)
+                renderStatus('warning', `${message}`);
+                renderSummary('info', 'Kode pairing sudah siap. Masukkan kode ini di WhatsApp sampai status berubah menjadi connected.');
+                renderConnectionState('Pairing code ready');
 
             }
 
@@ -162,15 +201,15 @@
             ppUrl
         }) => {
             if (token == device) {
+                isConnected = true;
 
                 $('.name').html(`Nama : ${user.name}`)
                 $('.number').html(`Number : ${user.id}`)
                 $('.device').html(`Device / Token : Not detected - ${token}`)
                 $('.imageee').html(` <img src="${ppUrl}" height="300px" alt="">`)
-                $('.statusss').html(`  <button class="btn btn-success" type="button" disabled>
-                                                    <span class="" role="status" aria-hidden="true"></span>
-                                                   Connected
-                                                </button>`)
+                renderStatus('success', 'WhatsApp berhasil connected.');
+                renderSummary('success', 'WhatsApp sudah connected dengan sukses. Anda sekarang bisa memakai device ini.');
+                renderConnectionState('Connected');
                 $('.logoutbutton').html(` <button class="btn btn-danger" class="logout"  id="logout"  onclick="logout({{ $number->body }})">
                                                    Logout
                                                </button>`)
@@ -181,10 +220,10 @@
             token
         }) => {
             if (token == device) {
-                $('.statusss').html(`  <button class="btn btn-danger" type="button" disabled>
-                                                    <span class="" role="status" aria-hidden="true"></span>
-                                                   Unauthorized
-                                                </button>`)
+                isConnected = false;
+                renderStatus('danger', 'Unauthorized');
+                renderSummary('danger', 'Sesi WhatsApp tidak valid. Anda perlu menghubungkan ulang device ini.');
+                renderConnectionState('Unauthorized');
             }
 
         })
@@ -193,12 +232,19 @@
             message
         }) => {
             if (token == device) {
-                $('.statusss').html(`  <button class="btn btn-success" type="button" disabled>
-                                                    <span class="" role="status" aria-hidden="true"></span>
-                                                   ${message}
-                                                </button>`);
+                const isClosed = message.includes('Connection closed');
+                const isLost = message.includes('Connection was lost');
+                const variant = isClosed ? 'danger' : (isLost ? 'warning' : 'info');
+
+                if (isClosed || isLost) {
+                    isConnected = false;
+                    renderConnectionState('Disconnected');
+                }
+
+                renderStatus(variant, message);
+                renderSummary(variant === 'info' ? 'info' : variant, message);
                 //if there is text connection close in message
-                if (message.includes('Connection closed')) {
+                if (isClosed) {
                     // count 5 second
                     let count = 5;
                     //set interval
@@ -211,10 +257,7 @@
                             location.reload();
                         }
                         //change text
-                        $('.statusss').html(`  <button class="btn btn-success" type="button" disabled>
-                                                    <span class="" role="status" aria-hidden="true"></span>
-                                                   ${message} in ${count} second
-                                                </button>`);
+                        renderStatus('danger', `${message} in ${count} second`);
                         //count down
                         count--;
                     }, 1000);
