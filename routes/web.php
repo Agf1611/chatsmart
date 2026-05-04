@@ -36,7 +36,7 @@ Route::get('/', function()
     // OR: return Redirect::intended('/bands'); // if using authentication
 });
 Route::get('/language/{locale}', [LocaleController::class, 'switch'])->name('language.switch');
-Route::middleware('auth')->group(function (){
+Route::middleware(['auth', 'approved'])->group(function (){
 
     Route::get('/home',[HomeController::class,'index'])->name('home');
     Route::post('/home/setSessionSelectedDevice',[HomeController::class,'setSelectedDeviceSession'])->name('home.setSessionSelectedDevice');

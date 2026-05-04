@@ -7,7 +7,7 @@
                 <div class="auth-brand">
                     <div class="brand-mark"><i class="bi bi-lightning-charge-fill"></i></div>
                     <h1>ChatSmart v1.0.0</h1>
-                    <p>Buat akun baru untuk mengelola device, campaign, dan workflow WhatsApp Anda dalam satu dashboard.</p>
+                    <p>Daftar akun baru terlebih dulu. Setelah itu admin akan meninjau, mengaktifkan akun, dan menentukan masa aktif akses Anda.</p>
                 </div>
 
                 @if (session()->has('alert'))
@@ -20,7 +20,7 @@
                 <div class="card auth-card shadow overflow-hidden">
                     <div class="card-body">
                         <h5 class="card-title">{{ __('system.register') }}</h5>
-                        <p class="card-text mb-4">{{ __('system.auth_welcome') }}</p>
+                        <p class="card-text mb-4">Akun baru tidak langsung aktif. Silakan daftar, lalu tunggu persetujuan admin.</p>
                         <form class="form-body" action="{{ route('register') }}" method="POST">
                             @csrf
                             <div class="row g-3">

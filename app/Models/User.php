@@ -26,6 +26,7 @@ class User extends Authenticatable
         'api_key',
         'chunk_blast',
         'limit_device',
+        'status',
         'active_subscription',
         'subscription_expired'
     ];
@@ -47,6 +48,7 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'subscription_expired' => 'datetime',
     ];
 
 
@@ -89,6 +91,16 @@ class User extends Authenticatable
     public function aiConversations()
     {
         return $this->hasMany(AiConversation::class);
+    }
+
+    public function getApprovalLabelAttribute()
+    {
+        return $this->status === 'active' ? 'Approved' : 'Pending';
+    }
+
+    public function getIsPendingApprovalAttribute()
+    {
+        return $this->level !== 'admin' && $this->status !== 'active';
     }
 
     // get expired subscription

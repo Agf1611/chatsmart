@@ -2,6 +2,11 @@
     $availableLocales = config('app.available_locales', []);
     $currentLocale = app()->getLocale();
     $currentLocaleMeta = $availableLocales[$currentLocale] ?? $availableLocales[config('app.fallback_locale', 'en')] ?? null;
+    $isAdmin = Auth::check() && Auth::user()->level === 'admin';
+    $pendingApprovalUsers = $isAdmin
+        ? \App\Models\User::where('level', 'user')->where('status', 'inactive')->latest()->take(5)->get()
+        : collect();
+    $pendingApprovalCount = $isAdmin ? \App\Models\User::where('level', 'user')->where('status', 'inactive')->count() : 0;
 @endphp
 
 <header class="top-header">
@@ -30,11 +35,36 @@
                         <span class="d-none" data-theme-label>Dark</span>
                     </button>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link top-action position-relative" href="#">
+                <li class="nav-item dropdown">
+                    <a class="nav-link top-action position-relative dropdown-toggle dropdown-toggle-nocaret" href="#"
+                        id="notificationsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-bell"></i>
-                        <span class="notification-dot">3</span>
+                        @if ($pendingApprovalCount > 0)
+                            <span class="notification-dot">{{ $pendingApprovalCount > 9 ? '9+' : $pendingApprovalCount }}</span>
+                        @endif
                     </a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationsDropdown">
+                        @if ($isAdmin && $pendingApprovalUsers->isNotEmpty())
+                            @foreach ($pendingApprovalUsers as $pendingUser)
+                                <li>
+                                    <a class="dropdown-item" href="{{ route('admin.manage-users') }}">
+                                        <div class="fw-semibold">{{ $pendingUser->username }}</div>
+                                        <small class="text-secondary">{{ $pendingUser->email }} menunggu approval admin</small>
+                                    </a>
+                                </li>
+                            @endforeach
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item text-primary" href="{{ route('admin.manage-users') }}">
+                                    Buka manajemen user
+                                </a>
+                            </li>
+                        @else
+                            <li>
+                                <span class="dropdown-item-text text-secondary">Tidak ada notifikasi baru.</span>
+                            </li>
+                        @endif
+                    </ul>
                 </li>
                 <li class="nav-item dropdown">
                     <a class="nav-link top-action dropdown-toggle dropdown-toggle-nocaret" href="#"

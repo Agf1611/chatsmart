@@ -36,6 +36,7 @@
                 <h3 class="section-title mb-2">Kelola user dashboard ChatSmart</h3>
                 <p class="hero-meta mb-0">Atur akun admin dan user, batas device, serta status subscription dengan
                     panel yang lebih rapi dan konsisten.</p>
+                <p class="hero-meta mt-2 mb-0">Pending approval saat ini: <strong>{{ $pendingApprovals }}</strong></p>
             </div>
             <div class="toolbar-actions">
                 <button type="button" class="btn btn-primary" onclick="addUser()">Add User</button>
@@ -55,6 +56,7 @@
                         <tr>
                             <th>Username</th>
                             <th>Email</th>
+                            <th>Status Akun</th>
                             <th>Total Device</th>
                             <th>Limit Device</th>
                             <th>Subscription</th>
@@ -67,22 +69,30 @@
                             <tr>
                                 <td class="fw-semibold">{{ $user->username }}</td>
                                 <td>{{ $user->email }}</td>
+                                <td>
+                                    @php
+                                        $approvalBadge = $user->is_pending_approval ? 'warning text-dark' : 'success';
+                                    @endphp
+                                    <span class="badge bg-{{ $approvalBadge }}">{{ $user->approval_label }}</span>
+                                </td>
                                 <td>{{ $user->total_device }}</td>
                                 <td>{{ $user->limit_device }}</td>
                                 <td>
                                     @php
-                                        $badge = $user->is_expired_subscription ? 'danger' : 'success';
+                                        $badge = $user->is_pending_approval ? 'secondary' : ($user->is_expired_subscription ? 'danger' : 'success');
                                     @endphp
                                     <span class="badge bg-{{ $badge }}">{{ $user->active_subscription }}</span>
                                 </td>
 
                                 <td>
                                     @php
-                                        if ($user->is_expired_subscription) {
+                                        if ($user->is_pending_approval) {
+                                            echo '<span class="badge bg-warning text-dark">Tunggu approval</span>';
+                                        } elseif ($user->is_expired_subscription) {
                                             echo '<span class="badge bg-danger">-</span>';
                                         } else {
                                             if ($user->active_subscription == 'active') {
-                                                echo $user->subscription_expired;
+                                                echo optional($user->subscription_expired)->format('Y-m-d H:i');
                                             } else {
                                                 echo '<span class="badge bg-danger">-</span>';
                                             }
@@ -147,6 +157,11 @@
                         <input type="email" name="email" id="email" class="form-control" value="">
                         <label for="password" class="form-label mt-3" id="labelpassword">Password</label>
                         <input type="password" name="password" id="password" class="form-control" value="">
+                        <label for="status" class="form-label mt-3">Status Akun</label><br>
+                        <select name="status" id="status" class="form-control">
+                            <option value="inactive" selected>Pending Approval</option>
+                            <option value="active">Approved / Active</option>
+                        </select><br>
                         <label for="limit_device" class="form-label mt-3">Limit Device</label>
                         <input type="number" name="limit_device" id="limit_device" class="form-control" value="">
                         <label for="active_subscription" class="form-label mt-3">Active Subscription</label><br>
@@ -157,6 +172,9 @@
                         </select><br>
                         <label for="subscription_expired" class="form-label">Subscription Expired</label>
                         <input type="date" name="subscription_expired" id="subscription_expired" class="form-control" value="">
+                        <small class="text-muted d-block mt-2" id="approvalHelp">
+                            Akun pending tidak bisa login sebelum status akun diubah menjadi approved / active oleh admin.
+                        </small>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -168,10 +186,35 @@
     </div>
 
     <script>
+        function syncUserFormState() {
+            const status = $('#status').val();
+            const subscription = $('#active_subscription').val();
+            const isPending = status !== 'active';
+            const needsExpiry = status === 'active' && subscription === 'active';
+
+            if (isPending) {
+                $('#active_subscription').val('inactive');
+                $('#subscription_expired').val('');
+            }
+
+            $('#active_subscription').prop('disabled', isPending);
+            $('#subscription_expired').prop('disabled', !needsExpiry);
+        }
+
         function addUser() {
             $('#modalLabel').html('Add User');
             $('#modalButton').html('Add');
             $('#formUser').attr('action', '{{ route('user.store') }}');
+            $('#labelpassword').html('Password');
+            $('#iduser').val('');
+            $('#username').val('');
+            $('#email').val('');
+            $('#password').val('');
+            $('#status').val('inactive');
+            $('#limit_device').val(0);
+            $('#active_subscription').val('inactive');
+            $('#subscription_expired').val('');
+            syncUserFormState();
             $('#modalUser').modal('show');
         }
 
@@ -191,13 +234,17 @@
                     $('#labelpassword').html('Password *(leave blank if not change)');
                     $('#username').val(data.username);
                     $('#email').val(data.email);
-                    $('#password').val(data.password);
+                    $('#password').val('');
+                    $('#status').val(data.status);
                     $('#limit_device').val(data.limit_device);
                     $('#active_subscription').val(data.active_subscription);
-                    $('#subscription_expired').val(data.subscription_expired);
+                    $('#subscription_expired').val(data.subscription_expired ? data.subscription_expired.substring(0, 10) : '');
                     $('#iduser').val(data.id);
+                    syncUserFormState();
                 }
             });
         }
+
+        $('#status, #active_subscription').on('change', syncUserFormState);
     </script>
 </x-layout-dashboard>

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -31,16 +30,15 @@ class RegisterController extends Controller
                 'password' => bcrypt($request->password),
                 'api_key' =>  Str::random(30),
                 'chunk_blast' => 0,
-                // 'subscription_expired' => Carbon::now()->addDays(30),
-                // 'active_subscription' => 'active',
-                // 'limit_device' => 5
-
+                'limit_device' => 0,
+                'active_subscription' => 'inactive',
+                'status' => 'inactive',
             ]
         );
 
         return redirect(route('login'))->with('alert', [
             'type' => 'success',
-            'msg' => 'Registrasi success,please sign in'
+            'msg' => 'Pendaftaran berhasil. Akun Anda akan aktif setelah disetujui admin.'
         ]);
     }
 }
