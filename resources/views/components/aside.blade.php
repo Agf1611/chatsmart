@@ -91,6 +91,12 @@
                     <div class="menu-title">{{ __('system.api_docs') }}</div>
                 </a>
             </li>
+            <li class="{{ request()->is('user/settings') ? 'active' : '' }}">
+                <a href="{{ route('user.settings') }}">
+                    <div class="parent-icon"><i class="bi bi-key"></i></div>
+                    <div class="menu-title">API Key & Account</div>
+                </a>
+            </li>
 
             @if (Auth::user()->level == 'admin')
                 <li class="menu-label">Settings</li>
@@ -122,9 +128,15 @@
 
         <div class="sidebar-promo">
             <div class="promo-orb"></div>
-            <h6>Tingkatkan Performa</h6>
-            <p>Dapatkan pengalaman ChatSmart yang lebih stabil, modern, dan siap dipakai untuk operasional harian.</p>
-            <a href="{{ route('admin.update') }}" class="btn btn-primary btn-sm">Kelola Update</a>
+            @if (Auth::user()->level === 'admin')
+                <h6>Tingkatkan Performa</h6>
+                <p>Dapatkan pengalaman ChatSmart yang lebih stabil, modern, dan siap dipakai untuk operasional harian.</p>
+                <a href="{{ route('admin.update') }}" class="btn btn-primary btn-sm">Kelola Update</a>
+            @else
+                <h6>Kelola Akun</h6>
+                <p>User biasa hanya bisa mengelola API key dan keamanan akun. Pengaturan server dan user lain khusus admin.</p>
+                <a href="{{ route('user.settings') }}" class="btn btn-primary btn-sm">Buka Pengaturan Akun</a>
+            @endif
         </div>
 
         <div class="sidebar-user-panel">
