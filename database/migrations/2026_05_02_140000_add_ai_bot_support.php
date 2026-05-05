@@ -14,7 +14,7 @@ class AddAiBotSupport extends Migration
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->unsignedBigInteger('device_id');
             $table->string('name');
-            $table->enum('engine_type', ['openai', 'gemini', 'webhook'])->default('openai');
+            $table->enum('engine_type', ['openai', 'gemini', 'ollama', 'webhook'])->default('openai');
             $table->string('model')->nullable();
             $table->enum('thinking_mode', ['precise', 'balanced', 'creative'])->default('balanced');
             $table->text('system_prompt')->nullable();

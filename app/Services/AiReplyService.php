@@ -138,6 +138,7 @@ class AiReplyService
         return [
             'openai' => ['gpt-5.2', 'gpt-5-mini', 'gpt-4.1-mini'],
             'gemini' => ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'],
+            'ollama' => ['llama3.2', 'qwen2.5', 'gemma2', 'mistral'],
             'webhook' => ['webhook'],
         ];
     }
@@ -351,11 +352,47 @@ class AiReplyService
     protected function dispatchToProvider(AiBot $bot, array $messages, array $payload): array
     {
         if ($bot->engine_type === 'openai') {
-            return $this->callOpenAi($bot, $messages);
+            $result = $this->callOpenAi($bot, $messages);
+            if ($result['success']) {
+                return $result;
+            }
+
+            $localFallback = $this->callOllama($bot, $messages);
+            if ($localFallback['success']) {
+                $this->recordDiagnostic('info', 'OpenAI gagal, fallback ke Ollama lokal.', $payload, [
+                    'bot_id' => $bot->id,
+                    'bot_name' => $bot->name,
+                    'primary_engine' => 'openai',
+                    'fallback_engine' => 'ollama',
+                ]);
+                return $localFallback;
+            }
+
+            return $result;
         }
 
         if ($bot->engine_type === 'gemini') {
-            return $this->callGemini($bot, $messages);
+            $result = $this->callGemini($bot, $messages);
+            if ($result['success']) {
+                return $result;
+            }
+
+            $localFallback = $this->callOllama($bot, $messages);
+            if ($localFallback['success']) {
+                $this->recordDiagnostic('info', 'Gemini gagal, fallback ke Ollama lokal.', $payload, [
+                    'bot_id' => $bot->id,
+                    'bot_name' => $bot->name,
+                    'primary_engine' => 'gemini',
+                    'fallback_engine' => 'ollama',
+                ]);
+                return $localFallback;
+            }
+
+            return $result;
+        }
+
+        if ($bot->engine_type === 'ollama') {
+            return $this->callOllama($bot, $messages);
         }
 
         if ($bot->engine_type === 'webhook') {
@@ -511,6 +548,44 @@ class AiReplyService
         ];
     }
 
+    protected function callOllama(AiBot $bot, array $messages): array
+    {
+        $baseUrl = trim((string) env('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'));
+        if ($baseUrl === '') {
+            return ['success' => false, 'message' => 'Ollama base URL is missing.'];
+        }
+
+        $model = $bot->model ?: env('OLLAMA_FALLBACK_MODEL', 'llama3.2');
+        $endpoint = rtrim($baseUrl, '/') . '/v1/chat/completions';
+        $body = [
+            'model' => $model,
+            'messages' => $this->formatChatMessages($messages),
+            'temperature' => $this->resolveTemperature($bot->thinking_mode),
+            'max_tokens' => $this->resolveMaxOutput($bot),
+        ];
+
+        $response = Http::timeout($this->resolveTimeout($bot))
+            ->acceptJson()
+            ->asJson()
+            ->post($endpoint, $body);
+
+        if (!$response->successful()) {
+            $detail = $this->extractProviderErrorDetail($response->json(), $response->body());
+            Log::error('Ollama request failed', ['body' => $response->body()]);
+            return ['success' => false, 'message' => 'Ollama request failed: ' . $detail];
+        }
+
+        $data = $response->json();
+        $text = trim((string) data_get($data, 'choices.0.message.content', ''));
+
+        return [
+            'success' => $text !== '',
+            'text' => $text,
+            'usage' => data_get($data, 'usage.total_tokens'),
+            'message' => $text !== '' ? 'OK' : 'Ollama returned empty text.',
+        ];
+    }
+
     protected function fallback(AiBot $bot, string $reason): array
     {
         Log::warning('AI bot fallback', ['bot_id' => $bot->id, 'reason' => $reason]);
@@ -596,6 +671,23 @@ class AiReplyService
 
             return [
                 'role' => $role === 'system' ? 'developer' : $role,
+                'content' => $content,
+            ];
+        }, $messages)));
+    }
+
+    protected function formatChatMessages(array $messages): array
+    {
+        return array_values(array_filter(array_map(function ($message) {
+            $role = (string) ($message['role'] ?? 'user');
+            $content = trim((string) ($message['content'] ?? ''));
+
+            if ($content === '') {
+                return null;
+            }
+
+            return [
+                'role' => in_array($role, ['system', 'assistant', 'user'], true) ? $role : 'user',
                 'content' => $content,
             ];
         }, $messages)));

@@ -32,18 +32,18 @@
     <div class="section-hero-card mb-4">
         <div class="row g-4 align-items-center">
             <div class="col-xl-8">
-                <div class="d-flex gap-3 align-items-start">
-                    <div class="hero-icon">
-                        <i class="bx bx-brain"></i>
-                    </div>
-                    <div>
-                        <h3 class="mb-2">{{ $aiBot ? 'Edit AI Bot' : 'Buat AI Bot Baru' }}</h3>
-                        <p class="hero-meta mb-0">
-                            Siapkan profil bot AI dengan persona, model, memory, fallback, dan webhook agar Auto Reply
-                            bisa memakai engine yang paling sesuai untuk kebutuhan operasional Anda.
-                        </p>
-                    </div>
-                </div>
+                        <div class="d-flex gap-3 align-items-start">
+                            <div class="hero-icon">
+                                <i class="bx bx-brain"></i>
+                            </div>
+                            <div>
+                                <h3 class="mb-2">{{ $aiBot ? 'Edit AI Bot' : 'Buat AI Bot Baru' }}</h3>
+                                <p class="hero-meta mb-0">
+                            Siapkan profil bot AI dengan persona, model, memory, fallback, engine lokal Ollama,
+                            dan webhook agar Auto Reply bisa memakai engine yang paling sesuai untuk kebutuhan operasional Anda.
+                                </p>
+                            </div>
+                        </div>
             </div>
             <div class="col-xl-4">
                 <div class="hero-metrics">
@@ -225,7 +225,7 @@
                     </div>
                     <div class="card-body pt-3">
                         <div class="smart-panel-note mb-3">
-                            Untuk V1, input yang diproses hanya pesan teks. Media dari user tetap diabaikan dan dicatat di log. AI reply dapat dipakai sebagai rule khusus atau bot default per device.
+                            Untuk V1, input yang diproses hanya pesan teks. Media dari user tetap diabaikan dan dicatat di log. AI reply dapat dipakai sebagai rule khusus atau bot default per device. Jika memilih engine Ollama, pastikan server lokalnya aktif di <code>OLLAMA_BASE_URL</code>.
                         </div>
                         <div class="smart-kpi-grid mb-3">
                             <div class="smart-kpi">

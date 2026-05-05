@@ -48,6 +48,7 @@ class AiBotController extends Controller
             'engineOptions' => [
                 'openai' => 'OpenAI / ChatGPT',
                 'gemini' => 'Gemini',
+                'ollama' => 'Ollama (Local)',
                 'webhook' => 'Webhook',
             ],
         ]);
@@ -118,6 +119,7 @@ class AiBotController extends Controller
         $engineOptions = [
             'openai' => 'OpenAI / ChatGPT',
             'gemini' => 'Gemini',
+            'ollama' => 'Ollama (Local)',
             'webhook' => 'Webhook',
         ];
 
@@ -158,7 +160,7 @@ class AiBotController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:191'],
             'device_id' => ['required', 'exists:devices,id'],
-            'engine_type' => ['required', 'in:openai,gemini,webhook'],
+            'engine_type' => ['required', 'in:openai,gemini,ollama,webhook'],
             'model' => ['nullable', 'string', 'max:191'],
             'thinking_mode' => ['required', 'in:precise,balanced,creative'],
             'system_prompt' => ['nullable', 'string'],
@@ -194,6 +196,12 @@ class AiBotController extends Controller
         if ($data['status'] === 'active' && $data['engine_type'] === 'gemini' && !env('GEMINI_API_KEY')) {
             throw ValidationException::withMessages([
                 'engine_type' => 'Gemini API key belum diisi di Admin Settings.',
+            ]);
+        }
+
+        if ($data['status'] === 'active' && $data['engine_type'] === 'ollama' && !trim((string) env('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'))) {
+            throw ValidationException::withMessages([
+                'engine_type' => 'OLLAMA_BASE_URL belum diisi.',
             ]);
         }
 
