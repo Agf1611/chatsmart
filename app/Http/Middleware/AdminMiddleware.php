@@ -17,9 +17,10 @@ class AdminMiddleware
      */
     public function handle(Request $request, Closure $next)
     {
+        $user = Auth::user();
 
         // only user level = admin can access this
-        if (Auth::user()->level != 'admin') {
+        if (!$user || $user->level != 'admin') {
             return redirect('/');
         }
         return $next($request);

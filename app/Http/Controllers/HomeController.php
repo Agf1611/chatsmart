@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\OperationalHealthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
 
 class HomeController extends Controller
@@ -12,28 +13,59 @@ class HomeController extends Controller
     
 
     public function index(Request $request, OperationalHealthService $healthService){
-        $numbers = $request->user()->devices()->latest()->paginate(15);
-      
-       
-        $user = $request->user()->withCount(['devices','campaigns'])->
-        withCount(['blasts as blasts_pending' => function($q){
-            return $q->where('status', 'pending');
-        }])->withCount(['blasts as blasts_success' => function($q){
-            return $q->where('status', 'success');
-        }])->withCount(['blasts as blasts_failed' => function($q){
-            return $q->where('status', 'failed');
-        }])->withCount('messageHistories')->find($request->user()->id);
+        try {
+            $numbers = $request->user()->devices()->latest()->paginate(15);
 
-       
+            $user = $request->user()->withCount(['devices','campaigns'])->
+            withCount(['blasts as blasts_pending' => function($q){
+                return $q->where('status', 'pending');
+            }])->withCount(['blasts as blasts_success' => function($q){
+                return $q->where('status', 'success');
+            }])->withCount(['blasts as blasts_failed' => function($q){
+                return $q->where('status', 'failed');
+            }])->withCount('messageHistories')->find($request->user()->id);
 
-        $user['expired_subscription_status'] = $user->expiredSubscription;
-        $user['subscription_status'] = $user->isExpiredSubscription ? 'Expired' : $user->active_subscription;
-        $selectedDevice = null;
-        if (session()->has('selectedDevice')) {
-            $selectedDevice = $request->user()->devices()->find(session()->get('selectedDevice')['device_id']);
+            $user['expired_subscription_status'] = $user->expiredSubscription;
+            $user['subscription_status'] = $user->isExpiredSubscription ? 'Expired' : $user->active_subscription;
+            $selectedDevice = null;
+            if (session()->has('selectedDevice')) {
+                $selectedDevice = $request->user()->devices()->find(session()->get('selectedDevice')['device_id']);
+            }
+
+            $operational = $healthService->buildDashboardSummary($request->user(), $selectedDevice);
+        } catch (\Throwable $th) {
+            Log::error('Home dashboard failed, using fallback payload.', [
+                'message' => $th->getMessage(),
+            ]);
+
+            $numbers = $request->user()->devices()->latest()->paginate(15);
+            $user = $request->user()->loadCount(['devices', 'campaigns', 'messageHistories', 'blasts as blasts_pending' => function ($q) {
+                return $q->where('status', 'pending');
+            }, 'blasts as blasts_success' => function ($q) {
+                return $q->where('status', 'success');
+            }, 'blasts as blasts_failed' => function ($q) {
+                return $q->where('status', 'failed');
+            }]);
+            $user['expired_subscription_status'] = $user->expiredSubscription;
+            $user['subscription_status'] = $user->isExpiredSubscription ? 'Expired' : $user->active_subscription;
+            $operational = [
+                'health' => [],
+                'metrics' => [
+                    'incoming_active_chats_today' => 0,
+                    'incoming_messages_tracked_today' => 0,
+                    'auto_reply_success_today' => 0,
+                    'auto_reply_failed_today' => 0,
+                    'ai_fallback_today' => 0,
+                    'paused_conversations' => 0,
+                ],
+                'alerts' => [[
+                    'level' => 'warning',
+                    'title' => 'Dashboard sedang dalam mode aman',
+                    'message' => 'Ada komponen operasional yang gagal dimuat, tetapi login tetap aman. Silakan cek log server.',
+                ]],
+                'setup' => [],
+            ];
         }
-
-        $operational = $healthService->buildDashboardSummary($request->user(), $selectedDevice);
 
         return view('home',compact('numbers','user', 'operational'));
     }
