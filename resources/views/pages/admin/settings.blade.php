@@ -241,6 +241,76 @@
                             <div class="alert alert-secondary border mt-3 mb-0" id="ai-test-result">
                                 Status test API akan tampil di sini.
                             </div>
+
+                            @if ($showAiDiagnostics)
+                                <div class="card mt-4 border">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                                            <div>
+                                                <h6 class="mb-1">AI Diagnostics</h6>
+                                                <p class="text-muted mb-0 small">
+                                                    Hanya admin utama yang bisa melihat ringkasan error AI terakhir.
+                                                </p>
+                                            </div>
+                                            <span class="badge bg-dark">Admin Utama</span>
+                                        </div>
+
+                                        @if (count($aiDiagnostics) === 0)
+                                            <div class="alert alert-light border mb-0">
+                                                Belum ada error AI yang tercatat.
+                                            </div>
+                                        @else
+                                            <div class="table-responsive">
+                                                <table class="table table-sm align-middle mb-0">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Waktu</th>
+                                                            <th>Level</th>
+                                                            <th>Ringkasan</th>
+                                                            <th>Detail</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach ($aiDiagnostics as $entry)
+                                                            @php
+                                                                $context = $entry['context'] ?? [];
+                                                                $detailParts = array_filter([
+                                                                    !empty($context['bot_name']) ? 'Bot: ' . $context['bot_name'] : null,
+                                                                    !empty($context['engine_type']) ? 'Engine: ' . strtoupper($context['engine_type']) : null,
+                                                                    !empty($context['device_body']) ? 'Device: ' . $context['device_body'] : null,
+                                                                    !empty($context['route']) ? 'Route: ' . $context['route'] : null,
+                                                                    !empty($context['chat_jid']) ? 'Chat: ' . $context['chat_jid'] : null,
+                                                                ]);
+                                                            @endphp
+                                                            <tr>
+                                                                <td class="small text-nowrap">{{ $entry['timestamp'] ?? '-' }}</td>
+                                                                <td>
+                                                                    <span class="badge bg-{{ ($entry['level'] ?? 'info') === 'warning' ? 'warning text-dark' : (($entry['level'] ?? 'info') === 'error' ? 'danger' : 'secondary') }}">
+                                                                        {{ strtoupper($entry['level'] ?? 'info') }}
+                                                                    </span>
+                                                                </td>
+                                                                <td>{{ $entry['message'] ?? '-' }}</td>
+                                                                <td class="small text-muted">
+                                                                    {{ count($detailParts) ? implode(' | ', $detailParts) : '-' }}
+                                                                </td>
+                                                            </tr>
+                                                                @if (!empty($context['expected_device_body']) || !empty($context['daily_limit']) || !empty($context['fallback_mode']))
+                                                                    <tr>
+                                                                        <td colspan="4" class="small text-muted pt-0">
+                                                                            {{ !empty($context['expected_device_body']) ? 'Expected device: ' . $context['expected_device_body'] : '' }}
+                                                                            {{ !empty($context['daily_limit']) ? (!empty($context['expected_device_body']) ? ' | ' : '') . 'Daily limit: ' . $context['daily_limit'] : '' }}
+                                                                            {{ !empty($context['fallback_mode']) ? (( !empty($context['expected_device_body']) || !empty($context['daily_limit'])) ? ' | ' : '') . 'Fallback: ' . $context['fallback_mode'] : '' }}
+                                                                        </td>
+                                                                    </tr>
+                                                                @endif
+                                                        @endforeach
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
                         </div>
                     </div>
                 </div>

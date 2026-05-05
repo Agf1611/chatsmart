@@ -4,6 +4,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AiDiagnosticService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
@@ -74,6 +75,7 @@ class SettingController extends Controller
 
     public function index()
     {
+        $showAiDiagnostics = Auth::check() && Auth::user()->isPrimaryAdmin();
         $historyCleanup = [
             'enabled' => filter_var(env('MESSAGE_HISTORY_AUTO_CLEANUP', false), FILTER_VALIDATE_BOOLEAN),
             'days' => (int) env('MESSAGE_HISTORY_RETENTION_DAYS', 30),
@@ -99,6 +101,10 @@ class SettingController extends Controller
             'aiBotSettings' => $aiBotSettings,
             'serverPreview' => $serverPreview,
             'serverProfiles' => $this->deploymentProfiles(),
+            'showAiDiagnostics' => $showAiDiagnostics,
+            'aiDiagnostics' => $showAiDiagnostics
+                ? app(AiDiagnosticService::class)->recent(15)
+                : [],
         ]);
     }
 

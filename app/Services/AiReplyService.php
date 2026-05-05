@@ -13,6 +13,10 @@ use Illuminate\Support\Str;
 
 class AiReplyService
 {
+    public function __construct(protected AiDiagnosticService $aiDiagnosticService)
+    {
+    }
+
     public function respondToIncoming(array $payload): array
     {
         if (!filter_var(env('AI_BOT_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
@@ -25,6 +29,9 @@ class AiReplyService
         $source = $target['source'];
 
         if (!$bot) {
+            $this->recordDiagnostic('warning', 'AI rule atau bot default tidak ditemukan.', $payload, [
+                'source' => $source,
+            ]);
             return $this->silent('AI rule or bot profile not found.');
         }
 
@@ -37,6 +44,12 @@ class AiReplyService
             : (string) optional($bot->device)->body;
 
         if ($expectedDeviceBody === '' || (string) $payload['device_body'] !== $expectedDeviceBody) {
+            $this->recordDiagnostic('warning', 'Device AI bot tidak cocok dengan device pengirim.', $payload, [
+                'bot_id' => $bot->id,
+                'bot_name' => $bot->name,
+                'expected_device_body' => $expectedDeviceBody,
+                'source' => $source,
+            ]);
             return $this->fallback($bot, 'AI bot device mismatch.');
         }
 
@@ -57,10 +70,21 @@ class AiReplyService
         ]);
 
         if ($this->isConversationPaused($conversation)) {
+            $this->recordDiagnostic('info', 'Percakapan AI sedang pause karena handoff/operator.', $payload, [
+                'bot_id' => $bot->id,
+                'bot_name' => $bot->name,
+                'source' => $source,
+            ]);
             return $this->silent('Conversation is paused for operator handoff.');
         }
 
         if ($this->isDailyLimitReached($bot)) {
+            $this->recordDiagnostic('warning', 'Batas harian AI bot sudah tercapai.', $payload, [
+                'bot_id' => $bot->id,
+                'bot_name' => $bot->name,
+                'daily_limit' => $bot->daily_limit,
+                'source' => $source,
+            ]);
             return $this->fallback($bot, 'Daily AI bot limit reached.');
         }
 
@@ -369,8 +393,9 @@ class AiReplyService
             ->post('https://api.openai.com/v1/responses', $body);
 
         if (!$response->successful()) {
+            $detail = $this->extractProviderErrorDetail($response->json(), $response->body());
             Log::error('OpenAI request failed', ['body' => $response->body()]);
-            return ['success' => false, 'message' => 'OpenAI request failed.'];
+            return ['success' => false, 'message' => 'OpenAI request failed: ' . $detail];
         }
 
         $data = $response->json();
@@ -424,8 +449,9 @@ class AiReplyService
             ->post($endpoint . '?key=' . urlencode($apiKey), $body);
 
         if (!$response->successful()) {
+            $detail = $this->extractProviderErrorDetail($response->json(), $response->body());
             Log::error('Gemini request failed', ['body' => $response->body()]);
-            return ['success' => false, 'message' => 'Gemini request failed.'];
+            return ['success' => false, 'message' => 'Gemini request failed: ' . $detail];
         }
 
         $data = $response->json();
@@ -466,11 +492,12 @@ class AiReplyService
                     'context_type' => $payload['context_type'] ?? 'personal',
                 ],
                 'messages' => $messages,
-            ]);
+        ]);
 
         if (!$response->successful()) {
+            $detail = $this->extractProviderErrorDetail($response->json(), $response->body());
             Log::error('AI webhook request failed', ['body' => $response->body()]);
-            return ['success' => false, 'message' => 'Webhook bot request failed.'];
+            return ['success' => false, 'message' => 'Webhook bot request failed: ' . $detail];
         }
 
         $data = $response->json();
@@ -487,6 +514,15 @@ class AiReplyService
     protected function fallback(AiBot $bot, string $reason): array
     {
         Log::warning('AI bot fallback', ['bot_id' => $bot->id, 'reason' => $reason]);
+        $this->recordDiagnostic('warning', $reason, [
+            'device_body' => optional($bot->device)->body,
+            'source' => 'fallback',
+        ], [
+            'bot_id' => $bot->id,
+            'bot_name' => $bot->name,
+            'engine_type' => $bot->engine_type,
+            'fallback_mode' => $bot->fallback_mode,
+        ]);
 
         if ($bot->fallback_mode === 'text' && trim((string) $bot->fallback_message) !== '') {
             return [
@@ -577,5 +613,54 @@ class AiReplyService
         }
 
         return '';
+    }
+
+    protected function extractProviderErrorDetail(array $payload, string $fallbackBody = ''): string
+    {
+        $candidates = array_filter([
+            data_get($payload, 'error.message'),
+            data_get($payload, 'message'),
+            data_get($payload, 'detail'),
+            $fallbackBody,
+        ]);
+
+        foreach ($candidates as $candidate) {
+            $text = trim((string) $candidate);
+            if ($text !== '') {
+                return mb_strimwidth($text, 0, 240, '...');
+            }
+        }
+
+        return 'Unknown provider error.';
+    }
+
+    protected function recordDiagnostic(string $level, string $message, array $payload = [], array $context = []): void
+    {
+        $this->aiDiagnosticService->record($level, $message, array_merge([
+            'device_body' => $payload['device_body'] ?? null,
+            'chat_jid' => $this->maskChatJid($payload['chat_jid'] ?? null),
+            'push_name' => $payload['push_name'] ?? null,
+            'route' => $payload['ai_route'] ?? null,
+            'matched_rule_id' => $payload['matched_rule_id'] ?? null,
+            'bot_id' => $payload['bot_id'] ?? null,
+        ], $context));
+    }
+
+    protected function maskChatJid(?string $jid): ?string
+    {
+        $jid = trim((string) $jid);
+        if ($jid === '') {
+            return null;
+        }
+
+        $parts = explode('@', $jid, 2);
+        $number = $parts[0] ?? '';
+        $suffix = $parts[1] ?? '';
+
+        if (strlen($number) > 4) {
+            $number = str_repeat('*', max(0, strlen($number) - 4)) . substr($number, -4);
+        }
+
+        return $suffix !== '' ? $number . '@' . $suffix : $number;
     }
 }

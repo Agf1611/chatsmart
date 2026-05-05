@@ -152,4 +152,17 @@ class User extends Authenticatable
         $disconnectedDevice = Device::whereUserId($this->id)->whereStatus('Disconnected')->count();
         return 'Connected: ' . $connectedDevice . ', Disconnected: ' . $disconnectedDevice;
     }
+
+    public function isPrimaryAdmin(): bool
+    {
+        if ($this->level !== 'admin') {
+            return false;
+        }
+
+        $primaryAdminId = static::query()
+            ->where('level', 'admin')
+            ->min('id');
+
+        return (int) $this->id === (int) $primaryAdminId;
+    }
 }
