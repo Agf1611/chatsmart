@@ -2,6 +2,7 @@
 
 const wa = require("./server/whatsapp");
 const fs = require("fs");
+const path = require("path");
 require("dotenv").config();
 const lib = require("./server/lib");
 global.log = lib.log;
@@ -77,6 +78,34 @@ const isHosting = String(process.env.TYPE_SERVER || "").toLowerCase() === "hosti
 const port = isHosting
   ? process.env.PORT || process.env.PORT_NODE || 3100
   : process.env.PORT_NODE || process.env.PORT || 3100;
+
+function writeRuntimeLog(type, error) {
+  try {
+    const logDir = path.join(process.cwd(), "storage", "logs");
+    fs.mkdirSync(logDir, { recursive: true });
+    const logFile = path.join(logDir, "node-runtime.log");
+    const detail = error && error.stack ? error.stack : String(error || "");
+    fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${type}: ${detail}\n\n`);
+  } catch (logError) {
+    console.error("Failed writing node runtime log", logError);
+  }
+}
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+  writeRuntimeLog("unhandledRejection", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
+  writeRuntimeLog("uncaughtException", error);
+});
+
+process.on("warning", (warning) => {
+  console.warn("Node warning:", warning);
+  writeRuntimeLog("warning", warning);
+});
+
 app.use((req, res, next) => {
   res.set("Cache-Control", "no-store");
   req.io = io;

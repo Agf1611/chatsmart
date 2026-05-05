@@ -161,6 +161,18 @@
             $('.connection-state').html(`Status : ${text}`);
         }
 
+        function renderConnectedArtwork() {
+            $('.imageee').html(`
+                <div class="d-flex flex-column align-items-center justify-content-center py-5">
+                    <div class="rounded-circle bg-light-success d-inline-flex align-items-center justify-content-center"
+                         style="width: 140px; height: 140px;">
+                        <i class="bi bi-check-circle-fill text-success" style="font-size: 5rem;"></i>
+                    </div>
+                    <div class="mt-3 fw-semibold text-success">WhatsApp Connected</div>
+                </div>
+            `);
+        }
+
         socket.on('connect', () => {
             if (!isConnected) {
                 renderStatus('info', 'Terhubung ke runtime Node, menunggu QR...');
@@ -210,7 +222,7 @@
                 $('.name').html(`Nama : ${user.name}`)
                 $('.number').html(`Number : ${user.id}`)
                 $('.device').html(`Device / Token : Not detected - ${token}`)
-                $('.imageee').html(` <img src="${ppUrl}" height="300px" alt="">`)
+                renderConnectedArtwork();
                 renderStatus('success', 'WhatsApp berhasil connected.');
                 renderSummary('success', 'WhatsApp sudah connected dengan sukses. Anda sekarang bisa memakai device ini.');
                 renderConnectionState('Connected');
@@ -275,6 +287,13 @@
 
 
 
+
+        if (isConnected) {
+            renderStatus('success', 'WhatsApp berhasil connected.');
+            renderSummary('success', 'WhatsApp already connected successfully.');
+            renderConnectionState('Connected');
+            renderConnectedArtwork();
+        }
 
         function logout(device) {
             socket.emit('LogoutDevice', device)

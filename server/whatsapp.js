@@ -226,96 +226,110 @@ async function createSocket(token, io, usePairingCode) {
   sessions[token] = socket;
 
   socket.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update;
+    try {
+      const { connection, lastDisconnect, qr } = update;
 
-    if (qr) {
-      delete reconnectAfterAuthReset[token];
-      try {
-        qrcode[token] = await QRCode.toDataURL(qr);
-        io?.emit("qrcode", {
-          token,
-          data: qrcode[token],
-          message: "please scan",
-        });
-      } catch (error) {
-        console.log(error);
+      if (qr) {
+        delete reconnectAfterAuthReset[token];
+        try {
+          qrcode[token] = await QRCode.toDataURL(qr);
+          io?.emit("qrcode", {
+            token,
+            data: qrcode[token],
+            message: "please scan",
+          });
+        } catch (error) {
+          console.log(error);
+        }
       }
-    }
 
-    if (connection === "open") {
-      delete reconnectAfterAuthReset[token];
-      await setStatus(token, "Connected");
-      delete qrcode[token];
-      delete pairingCode[token];
-      await emitConnectedState(token, io);
-    }
+      if (connection === "open") {
+        delete reconnectAfterAuthReset[token];
+        await setStatus(token, "Connected");
+        delete qrcode[token];
+        delete pairingCode[token];
+        await emitConnectedState(token, io);
+      }
 
-    if (connection === "close") {
-      const statusCode =
-        lastDisconnect?.error instanceof Boom
-          ? lastDisconnect.error.output?.statusCode
-          : lastDisconnect?.error?.output?.statusCode;
-      const disconnectMessage = lastDisconnect?.error?.message || lastDisconnect?.error?.data || "unknown";
-      console.log(`WA connection closed for ${token}. statusCode=${statusCode || "n/a"} reason=${disconnectMessage}`);
+      if (connection === "close") {
+        const statusCode =
+          lastDisconnect?.error instanceof Boom
+            ? lastDisconnect.error.output?.statusCode
+            : lastDisconnect?.error?.output?.statusCode;
+        const disconnectMessage = lastDisconnect?.error?.message || lastDisconnect?.error?.data || "unknown";
+        console.log(`WA connection closed for ${token}. statusCode=${statusCode || "n/a"} reason=${disconnectMessage}`);
 
-      await setStatus(token, "Disconnect");
+        await setStatus(token, "Disconnect");
 
-      if (
-        statusCode === DisconnectReason.loggedOut ||
-        statusCode === DisconnectReason.badSession ||
-        statusCode === DisconnectReason.multideviceMismatch
-      ) {
-        await clearConnection(token, { removeCreds: true });
+        if (
+          statusCode === DisconnectReason.loggedOut ||
+          statusCode === DisconnectReason.badSession ||
+          statusCode === DisconnectReason.multideviceMismatch
+        ) {
+          await clearConnection(token, { removeCreds: true });
 
-        if (!reconnectAfterAuthReset[token]) {
-          reconnectAfterAuthReset[token] = true;
+          if (!reconnectAfterAuthReset[token]) {
+            reconnectAfterAuthReset[token] = true;
+            io?.emit("message", {
+              token,
+              message: usePairingCode
+                ? "Session invalid. Requesting a new pairing code..."
+                : "Session invalid. Requesting a new QR code...",
+            });
+            setTimeout(() => {
+              connectToWhatsApp(token, io, usePairingCode).catch((error) => console.log(error));
+            }, 1000);
+            return;
+          }
+
+          delete reconnectAfterAuthReset[token];
+          io?.emit("Unauthorized", { token });
           io?.emit("message", {
             token,
-            message: usePairingCode
-              ? "Session invalid. Requesting a new pairing code..."
-              : "Session invalid. Requesting a new QR code...",
+            message: "Connection closed. You are logged out.",
           });
-          setTimeout(() => {
-            connectToWhatsApp(token, io, usePairingCode).catch((error) => console.log(error));
-          }, 1000);
           return;
         }
 
-        delete reconnectAfterAuthReset[token];
-        io?.emit("Unauthorized", { token });
-        io?.emit("message", {
-          token,
-          message: "Connection closed. You are logged out.",
-        });
-        return;
-      }
+        if (statusCode === DisconnectReason.connectionReplaced) {
+          io?.emit("message", {
+            token,
+            message: "Connection was lost",
+          });
+          await clearConnection(token);
+          return;
+        }
 
-      if (statusCode === DisconnectReason.connectionReplaced) {
         io?.emit("message", {
           token,
           message: "Connection was lost",
         });
+
         await clearConnection(token);
-        return;
+
+        if (hasCredentialState(token)) {
+          setTimeout(() => {
+            connectToWhatsApp(token, io, usePairingCode).catch((error) => console.log(error));
+          }, 1000);
+        }
       }
-
-      io?.emit("message", {
-        token,
-        message: "Connection was lost",
-      });
-
-      await clearConnection(token);
-
-      if (hasCredentialState(token)) {
-        setTimeout(() => {
-          connectToWhatsApp(token, io, usePairingCode).catch((error) => console.log(error));
-        }, 1000);
-      }
+    } catch (error) {
+      console.log(`Unhandled WA connection.update error for ${token}:`, error);
     }
   });
 
-  socket.ev.on("creds.update", saveCreds);
-  socket.ev.on("messages.upsert", (upsert) => IncomingMessage(upsert, socket));
+  socket.ev.on("creds.update", async () => {
+    try {
+      await saveCreds();
+    } catch (error) {
+      console.log(`Failed saving credentials for ${token}:`, error);
+    }
+  });
+  socket.ev.on("messages.upsert", (upsert) => {
+    IncomingMessage(upsert, socket).catch((error) => {
+      console.log(`Unhandled IncomingMessage error for ${token}:`, error);
+    });
+  });
 
   if (usePairingCode && !state.creds?.registered) {
     try {
