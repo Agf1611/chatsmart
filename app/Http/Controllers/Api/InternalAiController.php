@@ -39,7 +39,7 @@ class InternalAiController extends Controller
 
     protected function isAuthorized(Request $request): bool
     {
-        $expectedToken = env('AI_INTERNAL_TOKEN') ?: env('APP_KEY');
+        $expectedToken = env('AI_INTERNAL_TOKEN');
         if (!$expectedToken) {
             return false;
         }

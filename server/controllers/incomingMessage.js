@@ -431,7 +431,7 @@ function isTextLikeMessage(messageType, command) {
 
 async function requestInternalAiReply({ matchedReply, botId, aiRoute, message, command, participant, pushName, deviceBody }) {
   const appUrl = process.env.APP_URL;
-  const internalToken = process.env.AI_INTERNAL_TOKEN || process.env.APP_KEY;
+  const internalToken = process.env.AI_INTERNAL_TOKEN;
 
   if (!appUrl || !internalToken) {
     console.log("[ai-bot] internal endpoint config missing");

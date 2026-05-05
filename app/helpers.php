@@ -314,10 +314,17 @@ function getNodeRuntimeInternalUrl(): string
     return rtrim($internalUrl, '/');
 }
 
+function looksLikeWindowsPath(string $path): bool
+{
+    return (bool) preg_match('/^[a-zA-Z]:[\\\\\\/]/', trim($path));
+}
+
 function getNodeCredentialsBasePath(): string
 {
     $configuredPath = trim((string) getEnvValue('WA_CREDENTIALS_PATH', ''));
-    if ($configuredPath === '') {
+    $serverType = strtolower(trim((string) getEnvValue('TYPE_SERVER', (string) env('TYPE_SERVER', ''))));
+
+    if ($configuredPath === '' || ($serverType === 'hosting' && looksLikeWindowsPath($configuredPath))) {
         $configuredPath = storage_path('app/wa-sessions');
     }
 

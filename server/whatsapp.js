@@ -31,9 +31,25 @@ const DEFAULT_PP =
 const DEFAULT_WA_VERSION = Array.isArray(DEFAULT_CONNECTION_CONFIG?.version)
   ? [...DEFAULT_CONNECTION_CONFIG.version]
   : [2, 2329, 9];
-const CREDENTIALS_ROOT = path.resolve(
-  process.env.WA_CREDENTIALS_PATH || path.join(process.cwd(), "storage", "app", "wa-sessions")
-);
+function looksLikeWindowsPath(rawPath) {
+  return /^[a-zA-Z]:[\\/]/.test(String(rawPath || "").trim());
+}
+function resolveCredentialsRoot() {
+  const configuredPath = String(process.env.WA_CREDENTIALS_PATH || "").trim();
+  const serverType = String(process.env.TYPE_SERVER || "").toLowerCase();
+
+  if (configuredPath && !(serverType === "hosting" && looksLikeWindowsPath(configuredPath))) {
+    return path.resolve(configuredPath);
+  }
+
+  const fallbackPath = path.join(process.cwd(), "storage", "app", "wa-sessions");
+  if (serverType === "hosting" && configuredPath && looksLikeWindowsPath(configuredPath)) {
+    console.log(`Ignoring Windows WA_CREDENTIALS_PATH on hosting (${configuredPath}); using ${fallbackPath}`);
+  }
+
+  return path.resolve(fallbackPath);
+}
+const CREDENTIALS_ROOT = resolveCredentialsRoot();
 const LEGACY_CREDENTIALS_ROOT = path.resolve(path.join(process.cwd(), "credentials"));
 
 function parseConfiguredWaVersion(rawVersion) {
