@@ -191,6 +191,22 @@ Catatan penting:
 - pada shared hosting, biarkan `BAILEYS_FETCH_LATEST=false` agar startup Node tidak perlu version check jarak jauh
 - jika sering minta scan ulang setelah restart/deploy, isi `WA_CREDENTIALS_PATH` ke folder permanen di home hosting dan jangan ikut dihapus saat update
 
+## 7a. Backup Session WhatsApp Yang Aman
+
+Sesudah `WA_CREDENTIALS_PATH` diarahkan ke folder permanen, aktifkan backup berkala untuk session WhatsApp:
+
+```cron
+0 * * * * cd /home/USER/whastapp && bash tools/backup-credentials.sh
+*/5 * * * * cd /home/USER/whastapp && AUTO_RESTORE=0 bash tools/monitor-credentials.sh
+```
+
+Penjelasan singkat:
+
+- `backup-credentials.sh` membuat arsip `tar.gz` berisi session device yang valid saja.
+- `monitor-credentials.sh` default hanya memonitor dan mencatat kalau ada session hilang/rusak.
+- Auto-restore sengaja tidak aktif secara default. Jika nanti ingin diaktifkan, gunakan `AUTO_RESTORE=1` hanya setelah backup terbukti sehat.
+- Monitor sekarang memakai cooldown restore dan grace period perubahan file supaya tidak terus-menerus menimpa session aktif dan memicu logout berulang.
+
 ## 8. Install Dependency
 
 Masuk ke terminal hosting atau SSH, lalu jalankan dari folder project:

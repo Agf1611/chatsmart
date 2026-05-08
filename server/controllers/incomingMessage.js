@@ -1,4 +1,5 @@
 const axios = require("axios");
+const { generateWAMessageFromContent, proto } = require("@whiskeysockets/baileys");
 const { parseIncomingMessage, formatReceipt, prepareMediaMessage } = require("../lib/helper");
 const {
   isExistsEqualCommand,
@@ -17,6 +18,108 @@ const {
 
 require("dotenv").config();
 
+const PERSISTENT_MENU_ITEMS = [
+  "daftar pemasangan",
+  "lihat paket",
+  "voucher hotspot",
+  "cek tagihan",
+  "cara bayar",
+  "lapor gangguan",
+  "restart modem",
+];
+
+const BOT_OUTGOING_MESSAGE_IDS = new Map();
+
+function buildProtoListMessage(replyPayload) {
+  const rows = Array.isArray(replyPayload?.sections)
+    ? replyPayload.sections.flatMap((section) =>
+        Array.isArray(section?.rows)
+          ? section.rows.map((row, index) => ({
+              title: row?.title ? String(row.title) : `Opsi ${index + 1}`,
+              rowId: row?.rowId ? String(row.rowId) : `row-${index + 1}`,
+              description: row?.description ? String(row.description) : "",
+            }))
+          : []
+      )
+    : [];
+
+  const primaryButtons = rows.slice(0, 3).map((row, index) => ({
+    buttonId: row.rowId || `button-${index + 1}`,
+    buttonText: { displayText: row.title || `Opsi ${index + 1}` },
+    type: proto.Message.ButtonsMessage.Button.Type.RESPONSE,
+  }));
+
+  const remainingRows = rows.slice(3).map((row) => row.title).filter(Boolean);
+  const lines = [];
+  const title = replyPayload?.title ? String(replyPayload.title).trim() : "";
+  const text = replyPayload?.text ? String(replyPayload.text).trim() : "";
+
+  if (title) {
+    lines.push(title);
+  }
+
+  if (text) {
+    lines.push(text);
+  }
+
+  if (remainingRows.length > 0) {
+    lines.push("");
+    lines.push(`Pilihan lain: ${remainingRows.join(", ")}`);
+  }
+
+  return proto.Message.fromObject({
+    buttonsMessage: {
+      contentText: lines.join("\n").trim(),
+      footerText: replyPayload?.footer ? String(replyPayload.footer) : "",
+      headerType: proto.Message.ButtonsMessage.HeaderType.EMPTY,
+      buttons: primaryButtons,
+    },
+  });
+}
+
+function buildProtoButtonsMessage(replyPayload) {
+  const buttons = Array.isArray(replyPayload?.buttons)
+    ? replyPayload.buttons.map((button, index) => ({
+        buttonId: button?.buttonId ? String(button.buttonId) : `button-${index + 1}`,
+        buttonText: {
+          displayText: button?.buttonText?.displayText
+            ? String(button.buttonText.displayText)
+            : `Tombol ${index + 1}`,
+        },
+        type: proto.Message.ButtonsMessage.Button.Type.RESPONSE,
+      }))
+    : [];
+
+  return proto.Message.fromObject({
+    buttonsMessage: {
+      contentText: replyPayload?.text ? String(replyPayload.text) : "",
+      footerText: replyPayload?.footer ? String(replyPayload.footer) : "",
+      headerType: proto.Message.ButtonsMessage.HeaderType.EMPTY,
+      buttons,
+    },
+  });
+}
+
+function buildProtoInteractiveMessage(replyPayload) {
+  if (!replyPayload || typeof replyPayload !== "object" || Array.isArray(replyPayload)) {
+    return null;
+  }
+
+  if (Array.isArray(replyPayload.sections)) {
+    return buildProtoListMessage(replyPayload);
+  }
+
+  if (Array.isArray(replyPayload.buttons)) {
+    return buildProtoButtonsMessage(replyPayload);
+  }
+
+  return null;
+}
+
+function resolveReplyTargetJid(message) {
+  return String(message?.key?.remoteJid || "");
+}
+
 function shouldReplyToContext(replyWhen, remoteJid) {
   if (replyWhen === "All") {
     return true;
@@ -31,6 +134,38 @@ function shouldReplyToContext(replyWhen, remoteJid) {
   }
 
   return false;
+}
+
+function trackBotOutgoingMessage(messageId) {
+  if (!messageId) {
+    return;
+  }
+
+  BOT_OUTGOING_MESSAGE_IDS.set(String(messageId), Date.now());
+}
+
+function isBotOutgoingMessage(messageId) {
+  if (!messageId) {
+    return false;
+  }
+
+  const key = String(messageId);
+  const timestamp = BOT_OUTGOING_MESSAGE_IDS.get(key);
+  if (!timestamp) {
+    return false;
+  }
+
+  BOT_OUTGOING_MESSAGE_IDS.delete(key);
+  return true;
+}
+
+function pruneBotOutgoingMessages() {
+  const cutoff = Date.now() - 5 * 60 * 1000;
+  for (const [messageId, timestamp] of BOT_OUTGOING_MESSAGE_IDS.entries()) {
+    if (timestamp < cutoff) {
+      BOT_OUTGOING_MESSAGE_IDS.delete(messageId);
+    }
+  }
 }
 
 function getCurrentRuleDateParts() {
@@ -127,6 +262,122 @@ function isResumeBotCommand(command) {
   return normalizedCommand === "menu";
 }
 
+function isMenuCommand(command) {
+  const normalizedCommand = String(command || "").trim().toLowerCase();
+  return normalizedCommand === "menu" || normalizedCommand === "manu";
+}
+
+function isPaymentProofMessage(messageType, command) {
+  const normalizedCommand = String(command || "").trim().toLowerCase();
+
+  if (["imageMessage", "videoMessage", "documentMessage"].includes(messageType) && !normalizedCommand) {
+    return true;
+  }
+
+  return [
+    "bukti tf",
+    "bukti transfer",
+    "foto bukti",
+    "struk transfer",
+    "sudah transfer",
+    "transfer sudah",
+  ].some((phrase) => normalizedCommand.includes(phrase));
+}
+
+function isRegistrationSubmissionMessage(command) {
+  const normalizedCommand = String(command || "").trim().toLowerCase();
+  return [
+    "pendaftaran wifi bumdes sickas",
+    "pendaftaran wifi",
+    "id form: wifi-",
+    "link pdf formulir:",
+    "form: wifi-",
+  ].some((phrase) => normalizedCommand.includes(phrase));
+}
+
+function buildMenuButtonPayload(text, footer = "") {
+  return {
+    text,
+    buttons: [
+      {
+        buttonId: "menu",
+        buttonText: { displayText: "Menu" },
+        type: 1,
+      },
+    ],
+    footer,
+    headerType: 1,
+    viewOnce: true,
+  };
+}
+
+function attachMenuButton(replyPayload) {
+  if (
+    replyPayload &&
+    typeof replyPayload === "object" &&
+    !Array.isArray(replyPayload) &&
+    !replyPayload.type &&
+    !Array.isArray(replyPayload.buttons) &&
+    !Array.isArray(replyPayload.sections) &&
+    !Array.isArray(replyPayload.templateButtons) &&
+    typeof replyPayload.text === "string"
+  ) {
+    const normalizedText = replyPayload.text.toLowerCase();
+    if (normalizedText.includes("tombol menu") || normalizedText.includes("tekan tombol menu")) {
+      return buildMenuButtonPayload(replyPayload.text, replyPayload.footer || "");
+    }
+  }
+
+  return replyPayload;
+}
+
+function buildPersistentMenuPayload() {
+  return {
+    text: "Silakan pilih menu yang Anda butuhkan ya.",
+    footer: "",
+    title: "Menu SICKAS WiFi",
+    buttonText: "Pilih Menu",
+    sections: [
+      {
+        title: "Layanan Utama",
+        rows: PERSISTENT_MENU_ITEMS.map((item) => ({
+          title: item,
+          rowId: item,
+          description: "",
+        })),
+      },
+    ],
+  };
+}
+
+function shouldSendPersistentMenu(matchedReply, replyPayload, remoteJid) {
+  if (!matchedReply) {
+    return false;
+  }
+
+  if (matchedReply.trigger_event === "first_chat") {
+    return false;
+  }
+
+  if (String(remoteJid || "").includes("@lid")) {
+    return false;
+  }
+
+  if (Array.isArray(replyPayload?.sections)) {
+    return false;
+  }
+
+  const normalizedKeyword = String(matchedReply.keyword || "").trim().toLowerCase();
+  const normalizedName = String(matchedReply.name || "").trim().toLowerCase();
+
+  return !(
+    normalizedKeyword === "menu" ||
+    normalizedName.includes("welcome") ||
+    normalizedName.includes("menu cs") ||
+    normalizedName.includes("salam")
+  );
+}
+
 async function pickEligibleReply(replies, remoteJid, senderNumber) {
   const normalizedSender = normalizePhoneNumber(senderNumber);
   for (const reply of replies) {
@@ -170,19 +421,69 @@ function replaceTemplateVariables(payload, pushName) {
 }
 
 function shouldPauseForOperatorHandoff(matchedReply, command) {
+  return false;
+}
+
+function buildRegistrationThankYouPayload(pushName) {
+  const name = pushName || "";
+  return {
+    text:
+      `Halo ${name}, terima kasih sudah mendaftar di *SICKAS WiFi - BUMDes SICKAS*.\n\n` +
+      "Data pendaftaran Anda sudah kami terima. Silakan tunggu proses selanjutnya dari admin ya.",
+  };
+}
+
+function buildTroubleshootingReply(pushName) {
+  const name = pushName || "";
+  return {
+    text:
+      `Halo ${name}, silakan coba pengecekan berikut ya:\n` +
+      "1. Lihat indikator modem.\n" +
+      "2. Pastikan lampu Power menyala normal.\n" +
+      "3. Jika lampu LOS merah atau berkedip merah, kemungkinan ada gangguan jalur.\n" +
+      "4. Cabut adaptor modem selama 1 menit, lalu colok kembali.\n" +
+      "5. Tunggu 3 sampai 5 menit sampai lampu stabil.\n" +
+      "6. Coba tes internet kembali.\n\n" +
+      "Kalau masih bermasalah, balas di chat ini dengan nama pelanggan, alamat pemasangan, dan kondisi lampu modem ya.",
+  };
+}
+
+function shouldUseTroubleshootingReply(matchedReply) {
   if (!matchedReply) {
     return false;
   }
 
   const normalizedKeyword = String(matchedReply.keyword || "").trim().toLowerCase();
-  const normalizedName = String(matchedReply.name || "").trim().toLowerCase();
-  const normalizedCommand = String(command || "").trim().toLowerCase();
+  return normalizedKeyword === "lapor gangguan" || normalizedKeyword === "gangguan" || normalizedKeyword === "lemot";
+}
 
-  return (
-    normalizedKeyword === "hubungi admin" ||
-    normalizedName.includes("hubungi admin") ||
-    normalizedCommand === "hubungi admin"
-  );
+function buildPaymentConfirmationPayload(pushName) {
+  const name = pushName || "";
+  return {
+    text:
+      `Halo ${name}, terima kasih. Jika pembayaran sudah dilakukan, silakan tunggu proses pengecekan ya.\n\n` +
+      "Admin akan mengecek pembayaran Anda di chat ini.",
+  };
+}
+
+function shouldUsePaymentConfirmation(matchedReply) {
+  if (!matchedReply) {
+    return false;
+  }
+
+  return String(matchedReply.keyword || "").trim().toLowerCase() === "bayar";
+}
+
+function normalizeReplyPayloadForContext(replyPayload, matchedReply, pushName) {
+  if (shouldUseTroubleshootingReply(matchedReply)) {
+    return buildTroubleshootingReply(pushName);
+  }
+
+  if (shouldUsePaymentConfirmation(matchedReply)) {
+    return buildPaymentConfirmationPayload(pushName);
+  }
+
+  return replyPayload;
 }
 
 function normalizeWebhookResponse(response) {
@@ -224,7 +525,18 @@ function isListPayload(replyPayload) {
 
 function supportsSafeInteractiveSync(remoteJid) {
   const jid = String(remoteJid || "").toLowerCase();
-  return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@g.us");
+  return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@g.us") || jid.endsWith("@lid");
+}
+
+function extractSenderNumber(message, fallback = "") {
+  const personalSenderJid =
+    String(message?.key?.participantPn || "").trim() ||
+    String(message?.key?.senderPn || "").trim() ||
+    String(message?.key?.participant || "").trim() ||
+    "";
+
+  const candidate = personalSenderJid || String(fallback || "").trim();
+  return candidate ? candidate.split("@")[0] : "";
 }
 
 function interactivePayloadToText(replyPayload) {
@@ -354,14 +666,6 @@ function inferHistoryType(payload, matchedReply) {
     return matchedReply?.type || "text";
   }
 
-  if (payload.text) {
-    return "text";
-  }
-
-  if (payload.image || payload.video || payload.document || payload.audio || payload.type) {
-    return "media";
-  }
-
   if (Array.isArray(payload.sections)) {
     return "list";
   }
@@ -372,6 +676,14 @@ function inferHistoryType(payload, matchedReply) {
 
   if (Array.isArray(payload.templateButtons)) {
     return "template";
+  }
+
+  if (payload.text) {
+    return "text";
+  }
+
+  if (payload.image || payload.video || payload.document || payload.audio || payload.type) {
+    return "media";
   }
 
   return matchedReply?.type || "text";
@@ -470,28 +782,33 @@ async function requestInternalAiReply({ matchedReply, botId, aiRoute, message, c
 }
 
 async function sendAutoReply(sock, message, replyPayload, shouldQuote) {
+  const targetJid = resolveReplyTargetJid(message);
+  const quotedMessage = shouldQuote && targetJid === message.key.remoteJid ? message : undefined;
+
   if (typeof replyPayload === "string") {
-    await sock.sendMessage(
-      message.key.remoteJid,
-      { text: replyPayload },
-      { quoted: shouldQuote ? message : undefined }
-    );
-    return true;
-  }
+      const response = await sock.sendMessage(
+        targetJid,
+        { text: replyPayload },
+        { quoted: quotedMessage }
+      );
+      trackBotOutgoingMessage(response?.key?.id);
+      return true;
+    }
 
   if (replyPayload && typeof replyPayload === "object" && "type" in replyPayload) {
     if (replyPayload.type === "audio") {
-      await sock.sendMessage(
-        message.key.remoteJid,
-        {
-          audio: { url: replyPayload.url },
-          ptt: true,
-          mimetype: "audio/mpeg",
-        },
-        { quoted: shouldQuote ? message : undefined }
-      );
-      return true;
-    }
+        const response = await sock.sendMessage(
+          targetJid,
+          {
+            audio: { url: replyPayload.url },
+            ptt: true,
+            mimetype: "audio/mpeg",
+          },
+          { quoted: quotedMessage }
+        );
+        trackBotOutgoingMessage(response?.key?.id);
+        return true;
+      }
 
     const preparedPayload = await prepareMediaMessage(sock, {
       caption: replyPayload.caption || "",
@@ -502,30 +819,92 @@ async function sendAutoReply(sock, message, replyPayload, shouldQuote) {
       ptt: replyPayload.ptt,
     });
 
-    await sock.sendMessage(message.key.remoteJid, preparedPayload, {
-      quoted: shouldQuote ? message : undefined,
-    });
-    return true;
-  }
+      const response = await sock.sendMessage(targetJid, preparedPayload, {
+        quoted: quotedMessage,
+      });
+      trackBotOutgoingMessage(response?.key?.id);
+      return true;
+    }
 
   if (replyPayload && typeof replyPayload === "object" && "quoted" in replyPayload) {
     delete replyPayload.quoted;
   }
 
-  await sock.sendMessage(message.key.remoteJid, replyPayload, {
-    quoted: shouldQuote ? message : undefined,
+  const protoContent = buildProtoInteractiveMessage(replyPayload);
+  if (protoContent) {
+    if (targetJid.endsWith("@lid") && Array.isArray(replyPayload?.sections)) {
+      const previewPayload = interactivePayloadToText(replyPayload);
+      if (previewPayload?.text) {
+        const previewResponse = await sock.sendMessage(
+          targetJid,
+          { text: previewPayload.text },
+          { quoted: quotedMessage }
+        );
+        trackBotOutgoingMessage(previewResponse?.key?.id);
+      }
+    }
+
+    const generatedMessage = generateWAMessageFromContent(targetJid, protoContent, {
+      userJid: sock.user.id,
+      quoted: quotedMessage,
+    });
+
+    await sock.relayMessage(targetJid, generatedMessage.message, {
+      messageId: generatedMessage.key.id,
+    });
+    trackBotOutgoingMessage(generatedMessage.key.id);
+    return true;
+  }
+
+  const response = await sock.sendMessage(targetJid, replyPayload, {
+    quoted: quotedMessage,
   });
+  trackBotOutgoingMessage(response?.key?.id);
   return true;
 }
 
 const IncomingMessage = async (upsert, sock) => {
   try {
+    pruneBotOutgoingMessages();
+
     if (!upsert?.messages?.length) {
       return;
     }
 
     const message = upsert.messages[0];
-    if (!message?.message || message?.key?.fromMe) {
+    if (!message?.message) {
+      return;
+    }
+
+    if (message?.key?.fromMe) {
+      if (isBotOutgoingMessage(message?.key?.id)) {
+        return;
+      }
+
+      if (message?.key?.remoteJid && message?.key?.remoteJid !== "status@broadcast") {
+        const deviceBody = String(sock.user.id).split(":")[0];
+        const participant = message.key.participant ? formatReceipt(message.key.participant) : undefined;
+        const chatIdentity = participant || message.key.remoteJid;
+        const senderNumber = participant
+          ? participant.replace("@s.whatsapp.net", "")
+          : String(message.key.remoteJid || "").split("@")[0];
+
+        await pauseContactForOperator(
+          deviceBody,
+          chatIdentity,
+          senderNumber,
+          message.pushName || "",
+          message.key.remoteJid.includes("@g.us") ? "group" : "personal",
+          "Paused automatically after manual admin reply"
+        );
+
+        console.log("[autoreply] paused-by-admin-manual-message", {
+          deviceBody,
+          chatIdentity,
+          messageId: message?.key?.id || null,
+        });
+      }
+
       return;
     }
 
@@ -534,20 +913,70 @@ const IncomingMessage = async (upsert, sock) => {
     }
 
     const participant = message.key.participant ? formatReceipt(message.key.participant) : undefined;
-    const { command, bufferImage, from, messageType } = await parseIncomingMessage(message);
+    const { command, bufferImage, from, messageType, senderJid } = await parseIncomingMessage(message);
     const pushName = message.pushName || "";
     const deviceBody = String(sock.user.id).split(":")[0];
     const chatIdentity = participant || message.key.remoteJid;
-    const senderNumber = participant ? participant.replace("@s.whatsapp.net", "") : from;
+    const senderNumber = participant ? participant.replace("@s.whatsapp.net", "") : extractSenderNumber(message, senderJid || from);
     const isFirstChat = !(await hasIncomingMessageLog(deviceBody, chatIdentity));
     const isPausedForOperator = await isContactPaused(deviceBody, chatIdentity);
 
+    if (isPaymentProofMessage(messageType, command)) {
+      await saveIncomingMessageLog(deviceBody, chatIdentity);
+      console.log("[autoreply] payment-proof-silent", {
+        deviceBody,
+        chatIdentity,
+        messageType,
+      });
+      return;
+    }
+
+    if (isMenuCommand(command)) {
+      const menuPayload = buildPersistentMenuPayload();
+      await sendAutoReply(sock, message, menuPayload, false);
+      try {
+        await saveAutoReplyHistory(
+          deviceBody,
+          normalizePhoneNumber(senderNumber) || chatIdentity,
+          "button",
+          extractHistoryMessage(menuPayload),
+          JSON.stringify(menuPayload),
+          "success",
+          "Auto reply: direct menu shortcut"
+        );
+      } catch (historyError) {
+        console.log("[autoreply] history-save-failed", historyError?.message || historyError);
+      }
+
+      await saveIncomingMessageLog(deviceBody, chatIdentity);
+      console.log("[autoreply] direct-menu-sent", {
+        deviceBody,
+        chatIdentity,
+        command,
+      });
+      return true;
+    }
+
+    if (isRegistrationSubmissionMessage(command)) {
+      const registrationPayload = buildRegistrationThankYouPayload(pushName);
+      await sendAutoReply(sock, message, registrationPayload, false);
+      await sendAutoReply(sock, message, buildPersistentMenuPayload(), false);
+      await saveIncomingMessageLog(deviceBody, chatIdentity);
+      console.log("[autoreply] registration-thankyou", {
+        deviceBody,
+        chatIdentity,
+        command,
+      });
+      return;
+    }
+
     if (isPausedForOperator) {
-      if (isResumeBotCommand(command)) {
+      if (command) {
         await resumeContactPause(deviceBody, chatIdentity);
-        console.log("[autoreply] contact-resumed-by-menu", {
+        console.log("[autoreply] contact-resumed-by-customer-trigger", {
           deviceBody,
           chatIdentity,
+          command,
         });
       } else {
         await saveIncomingMessageLog(deviceBody, chatIdentity);
@@ -702,9 +1131,10 @@ const IncomingMessage = async (upsert, sock) => {
       shouldQuote = Boolean(replyPayload?.quoted);
     }
 
-    const finalPayload = replaceTemplateVariables(replyPayload, pushName);
+    const contextualPayload = normalizeReplyPayloadForContext(replyPayload, matchedReply, pushName);
+    const finalPayload = replaceTemplateVariables(contextualPayload, pushName);
     const transportDecision = resolveTransportPayload(finalPayload, message.key.remoteJid, matchedReply);
-    const transportPayload = transportDecision.payload;
+    const transportPayload = attachMenuButton(transportDecision.payload);
     if (transportDecision.mode === "fallback_text") {
       console.log("[autoreply] interactive-fallback-text", {
         deviceBody,
@@ -716,19 +1146,31 @@ const IncomingMessage = async (upsert, sock) => {
     }
 
     await sendAutoReply(sock, message, transportPayload, shouldQuote);
-    await saveAutoReplyHistory(
-      deviceBody,
-      normalizePhoneNumber(senderNumber) || chatIdentity,
-      inferHistoryType(transportPayload, matchedReply),
-      extractHistoryMessage(transportPayload),
-      JSON.stringify(transportPayload || {}),
-      "success",
-      matchedReply
-        ? `Auto reply: ${matchedReply.name || matchedReply.keyword || matchedReply.type} | transport=${transportDecision.policy}:${transportDecision.mode}`
-        : replySource === "default_ai"
-          ? `AI default auto reply | transport=${transportDecision.policy}:${transportDecision.mode}`
-          : `Webhook auto reply | transport=${transportDecision.mode}`
-    );
+    if (shouldSendPersistentMenu(matchedReply, transportPayload, message.key.remoteJid)) {
+      await sendAutoReply(sock, message, buildPersistentMenuPayload(), false);
+      console.log("[autoreply] persistent-menu-sent", {
+        deviceBody,
+        command,
+        ruleId: matchedReply?.id || null,
+      });
+    }
+    try {
+      await saveAutoReplyHistory(
+        deviceBody,
+        normalizePhoneNumber(senderNumber) || chatIdentity,
+        inferHistoryType(transportPayload, matchedReply),
+        extractHistoryMessage(transportPayload),
+        JSON.stringify(transportPayload || {}),
+        "success",
+        matchedReply
+          ? `Auto reply: ${matchedReply.name || matchedReply.keyword || matchedReply.type} | transport=${transportDecision.policy}:${transportDecision.mode}`
+          : replySource === "default_ai"
+            ? `AI default auto reply | transport=${transportDecision.policy}:${transportDecision.mode}`
+            : `Webhook auto reply | transport=${transportDecision.mode}`
+      );
+    } catch (historyError) {
+      console.log("[autoreply] history-save-failed", historyError?.message || historyError);
+    }
 
     if (shouldPauseForOperatorHandoff(matchedReply, command)) {
       await pauseContactForOperator(

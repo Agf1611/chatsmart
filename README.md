@@ -97,6 +97,33 @@ composer install --no-dev --optimize-autoloader
 php artisan storage:link
 ```
 
+## Backup Kredensial WhatsApp
+
+- Project menyertakan script Linux untuk backup, restore, dan monitoring session WhatsApp:
+  - `tools/backup-credentials.sh`
+  - `tools/restore-credentials.sh`
+  - `tools/monitor-credentials.sh`
+- Default session aktif ada di `storage/app/wa-sessions`, backup tar ada di `backup/credentials`, dan snapshot sebelum restore ada di `storage/app/wa-sessions-snapshots`.
+- Jalankan backup manual:
+```bash
+bash tools/backup-credentials.sh
+```
+- Jalankan restore manual dari backup terbaru:
+```bash
+bash tools/restore-credentials.sh --device 6285794250730
+```
+- Cek simulasi restore tanpa menimpa session aktif:
+```bash
+bash tools/restore-credentials.sh --device 6285794250730 --dry-run
+```
+- Monitor sekarang default hanya mendeteksi masalah dan mencatat log. Auto-restore tidak aktif kecuali kamu set `AUTO_RESTORE=1`.
+- Kalau ingin pakai cron, pola yang aman:
+```cron
+0 * * * * cd /path/project && bash tools/backup-credentials.sh
+*/5 * * * * cd /path/project && AUTO_RESTORE=0 bash tools/monitor-credentials.sh
+```
+- Jika suatu saat auto-restore mau diaktifkan, pastikan backup sudah sehat dulu. Script monitor sekarang punya cooldown dan grace period supaya tidak loop restore terus-menerus saat session sedang berubah atau backup tidak cocok.
+
 ## Instalasi Aplikasi
 
 1. Buka `/install`

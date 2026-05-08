@@ -1,9 +1,9 @@
 "use strict";
 
-const wa = require("./server/whatsapp");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
+const wa = require("./server/whatsapp");
 const lib = require("./server/lib");
 global.log = lib.log;
 

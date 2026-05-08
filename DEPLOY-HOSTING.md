@@ -64,6 +64,30 @@ php artisan storage:link
 - ganti password admin
 - rotasi `AUTH` bila sebelumnya memakai nilai contoh
 
+## Backup Dan Restore Session WhatsApp
+
+Untuk hosting Linux, pakai script bawaan project:
+
+```bash
+bash tools/backup-credentials.sh
+bash tools/restore-credentials.sh --device 6285794250730 --dry-run
+bash tools/restore-credentials.sh --device 6285794250730
+```
+
+Rekomendasi cron yang aman:
+
+```cron
+0 * * * * cd /home/USER/whastapp && bash tools/backup-credentials.sh
+*/5 * * * * cd /home/USER/whastapp && AUTO_RESTORE=0 bash tools/monitor-credentials.sh
+```
+
+Catatan penting:
+
+- `tools/monitor-credentials.sh` sekarang default hanya memonitor dan log, tidak langsung restore.
+- Auto-restore baru aktif kalau dijalankan dengan `AUTO_RESTORE=1`.
+- Monitor punya cooldown restore dan grace period perubahan file supaya tidak menimpa session yang baru saja berubah atau sedang proses pairing.
+- Backup per-device divalidasi dulu sebelum dipakai restore, jadi lebih aman dibanding restore buta ke semua folder.
+
 ## Isi Paket Rilis
 
 - source Laravel

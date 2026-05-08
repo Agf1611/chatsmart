@@ -44,7 +44,7 @@ function formatReceipt(value) {
     return value;
   }
 
-  if (value.includes("@g.us") || value.includes("@s.whatsapp.net")) {
+  if (value.includes("@g.us") || value.includes("@s.whatsapp.net") || value.includes("@lid")) {
     return value;
   }
 
@@ -66,6 +66,27 @@ function formatReceipt(value) {
   }
 
   return `${digits}@s.whatsapp.net`;
+}
+
+function normalizeLookupNumber(value) {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (!digits) {
+    return "";
+  }
+
+  if (digits.startsWith("00")) {
+    digits = digits.slice(2);
+  }
+
+  if (digits.startsWith("0")) {
+    digits = `62${digits.slice(1)}`;
+  }
+
+  if (digits.startsWith("8")) {
+    digits = `62${digits}`;
+  }
+
+  return digits;
 }
 
 async function asyncForEach(items, callback) {
@@ -116,7 +137,12 @@ async function parseIncomingMessage(message) {
   const normalizedMessage = unwrapMessageContent(message?.message || {});
   const command = removeForbiddenCharacters(extractTextMessage(normalizedMessage).toLowerCase().trim());
   const remoteJid = message?.key?.remoteJid || "";
-  const from = remoteJid.split("@")[0] || "";
+  const preferredSenderJid =
+    String(message?.key?.participantPn || "").trim() ||
+    String(message?.key?.senderPn || "").trim() ||
+    String(message?.key?.participant || "").trim() ||
+    remoteJid;
+  const from = preferredSenderJid.split("@")[0] || remoteJid.split("@")[0] || "";
   let bufferImage;
 
   if (normalizedMessage?.imageMessage) {
@@ -129,6 +155,7 @@ async function parseIncomingMessage(message) {
     command,
     bufferImage,
     from,
+    senderJid: preferredSenderJid,
     messageType: getContentType(normalizedMessage),
   };
 }
@@ -187,6 +214,7 @@ async function prepareMediaMessage(sock, details) {
 
 module.exports = {
   formatReceipt,
+  normalizeLookupNumber,
   asyncForEach,
   removeForbiddenCharacters,
   unwrapMessageContent,

@@ -198,7 +198,6 @@ async function pauseContactForOperator(deviceBody, chatJid, senderNumber, contac
      FROM ai_bots
      INNER JOIN devices ON devices.id = ai_bots.device_id
      WHERE devices.body = ?
-       AND ai_bots.status = 'active'
      ORDER BY ai_bots.updated_at DESC
      LIMIT 1`,
     [deviceBody]
