@@ -1,133 +1,124 @@
 @php
     $availableLocales = config('app.available_locales', []);
     $currentLocale = app()->getLocale();
-    $currentLocaleMeta = $availableLocales[$currentLocale] ?? $availableLocales[config('app.fallback_locale', 'en')] ?? null;
     $isAdmin = Auth::check() && Auth::user()->level === 'admin';
     $pendingApprovalUsers = $isAdmin
         ? \App\Models\User::where('level', 'user')->where('status', 'inactive')->latest()->take(5)->get()
         : collect();
-    $pendingApprovalCount = $isAdmin ? \App\Models\User::where('level', 'user')->where('status', 'inactive')->count() : 0;
+    $pendingApprovalCount = $isAdmin
+        ? \App\Models\User::where('level', 'user')->where('status', 'inactive')->count()
+        : 0;
+
+    $pageLabel = 'Workspace';
+    if (request()->routeIs('home')) $pageLabel = 'Dashboard';
+    elseif (request()->routeIs('autoreply*')) $pageLabel = 'Auto Reply';
+    elseif (request()->routeIs('ai-bots*')) $pageLabel = 'AI Bot';
+    elseif (request()->routeIs('ai-conversations*')) $pageLabel = 'Histori AI';
+    elseif (request()->routeIs('campaign*')) $pageLabel = 'Campaign';
+    elseif (request()->routeIs('messages.*')) $pageLabel = 'Riwayat Pesan';
+    elseif (request()->routeIs('phonebook')) $pageLabel = 'Kontak';
+    elseif (request()->routeIs('file-manager')) $pageLabel = 'File Manager';
 @endphp
 
 <header class="top-header">
     <nav class="navbar navbar-expand gap-3 align-items-center">
-        <div class="mobile-toggle-icon fs-3">
+        <button type="button" class="mobile-toggle-icon border-0" aria-label="Buka navigasi">
             <i class="bi bi-list"></i>
-        </div>
+        </button>
 
-        <form class="searchbar">
-            <div class="position-absolute top-50 translate-middle-y search-icon ms-3"><i class="bi bi-search"></i></div>
-            <input class="form-control" type="text" placeholder="Search anything...">
-            <span class="search-shortcut">Ctrl + K</span>
-            <div class="position-absolute top-50 translate-middle-y search-close-icon"><i class="bi bi-x-lg"></i></div>
-        </form>
+        <div class="cs-header-context">
+            <strong>{{ $pageLabel }}</strong>
+            <span>
+                @if (session()->has('selectedDevice'))
+                    <i class="bi bi-phone"></i>{{ session('selectedDevice.device_body') }}
+                @else
+                    ChatSmart Workspace
+                @endif
+            </span>
+        </div>
 
         <div class="top-navbar-right ms-auto">
             <ul class="navbar-nav align-items-center gap-2">
-                <li class="nav-item search-toggle-icon">
-                    <a class="nav-link top-action" href="#">
-                        <i class="bi bi-search"></i>
-                    </a>
-                </li>
                 <li class="nav-item">
                     <button type="button" class="top-action border-0" data-theme-toggle>
-                        <i class="bi bi-moon-stars-fill" data-theme-icon></i>
+                        <i class="bi bi-moon-stars" data-theme-icon></i>
                         <span class="d-none" data-theme-label>Dark</span>
                     </button>
                 </li>
-                <li class="nav-item dropdown">
-                    <a class="nav-link top-action position-relative dropdown-toggle dropdown-toggle-nocaret" href="#"
-                        id="notificationsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-bell"></i>
-                        @if ($pendingApprovalCount > 0)
-                            <span class="notification-dot">{{ $pendingApprovalCount > 9 ? '9+' : $pendingApprovalCount }}</span>
-                        @endif
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationsDropdown">
-                        @if ($isAdmin && $pendingApprovalUsers->isNotEmpty())
-                            @foreach ($pendingApprovalUsers as $pendingUser)
+
+                @if ($isAdmin)
+                    <li class="nav-item dropdown">
+                        <a class="nav-link top-action position-relative dropdown-toggle dropdown-toggle-nocaret" href="#"
+                            id="notificationsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false"
+                            aria-label="Notifikasi">
+                            <i class="bi bi-bell"></i>
+                            @if ($pendingApprovalCount > 0)
+                                <span class="notification-dot">{{ $pendingApprovalCount > 9 ? '9+' : $pendingApprovalCount }}</span>
+                            @endif
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationsDropdown">
+                            @forelse ($pendingApprovalUsers as $pendingUser)
                                 <li>
                                     <a class="dropdown-item" href="{{ route('admin.manage-users') }}">
                                         <div class="fw-semibold">{{ $pendingUser->username }}</div>
-                                        <small class="text-secondary">{{ $pendingUser->email }} menunggu approval admin</small>
+                                        <small class="text-secondary">Menunggu persetujuan admin</small>
+                                    </a>
+                                </li>
+                            @empty
+                                <li><span class="dropdown-item-text text-secondary">Tidak ada notifikasi baru.</span></li>
+                            @endforelse
+                            @if ($pendingApprovalUsers->isNotEmpty())
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-primary" href="{{ route('admin.manage-users') }}">Kelola pengguna</a></li>
+                            @endif
+                        </ul>
+                    </li>
+                @endif
+
+                @if (count($availableLocales) > 1)
+                    <li class="nav-item dropdown cs-language-menu">
+                        <a class="nav-link top-action dropdown-toggle dropdown-toggle-nocaret" href="#"
+                            id="languageDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false"
+                            aria-label="Pilih bahasa">
+                            <i class="bi bi-globe2"></i>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
+                            @foreach ($availableLocales as $locale => $meta)
+                                <li>
+                                    <a class="dropdown-item" href="{{ route('language.switch', $locale) }}">
+                                        {{ $meta['label'] }}
+                                        @if ($currentLocale === $locale)<i class="bi bi-check2 ms-2"></i>@endif
                                     </a>
                                 </li>
                             @endforeach
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <a class="dropdown-item text-primary" href="{{ route('admin.manage-users') }}">
-                                    Buka manajemen user
-                                </a>
-                            </li>
-                        @else
-                            <li>
-                                <span class="dropdown-item-text text-secondary">Tidak ada notifikasi baru.</span>
-                            </li>
-                        @endif
-                    </ul>
-                </li>
-                <li class="nav-item dropdown">
-                    <a class="nav-link top-action dropdown-toggle dropdown-toggle-nocaret" href="#"
-                        id="languageDropdown" role="button"
-                        data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-globe2"></i>
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
-                        @foreach ($availableLocales as $locale => $meta)
-                            <li>
-                                <a class="dropdown-item" href="{{ route('language.switch', $locale) }}">
-                                    <span class="flag-icon flag-icon-{{ $meta['flag'] }}"></span>
-                                    {{ $meta['label'] }}
-                                    @if ($currentLocale === $locale)
-                                        <i class="bi bi-check2 ms-2"></i>
-                                    @endif
-                                </a>
-                            </li>
-                        @endforeach
-                    </ul>
-                </li>
+                        </ul>
+                    </li>
+                @endif
+
                 <li class="nav-item dropdown dropdown-user-setting">
                     <a class="nav-link dropdown-toggle dropdown-toggle-nocaret user-chip" href="#"
                         data-bs-toggle="dropdown" aria-label="Buka menu pengguna">
                         <span class="user-chip__avatar">
-                            <img src="{{ asset('assets/images/avatars/avatar-1.png') }}" class="user-img" alt="">
+                            <img src="{{ asset('assets/images/avatars/avatar-1.png') }}" class="user-img"
+                                alt="{{ Auth::user()->username }}">
                         </span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li>
-                            <a class="dropdown-item" href="#">
-                                <div class="d-flex align-items-center">
-                                    <img src="{{ asset('assets/images/avatars/avatar-1.png') }}" alt=""
-                                        class="rounded-circle" width="54" height="54">
-                                    <div class="ms-3">
-                                        <h6 class="mb-0 dropdown-user-name">{{ Auth::user()->username }}</h6>
-                                        <small class="mb-0 dropdown-user-designation text-secondary">{{ Auth::user()->level }}</small>
-                                    </div>
-                                </div>
-                            </a>
+                        <li class="cs-user-menu-heading">
+                            <strong>{{ Auth::user()->username }}</strong>
+                            <span>{{ ucfirst(Auth::user()->level) }}</span>
                         </li>
-                        <li>
-                            <hr class="dropdown-divider">
-                        </li>
+                        <li><hr class="dropdown-divider"></li>
                         <li>
                             <a class="dropdown-item" href="{{ route('user.settings') }}">
-                                <div class="d-flex align-items-center">
-                                    <div class=""><i class="bi bi-gear-fill"></i></div>
-                                    <div class="ms-3"><span>{{ __('system.settings') }}</span></div>
-                                </div>
+                                <i class="bi bi-gear"></i> Pengaturan akun
                             </a>
-                        </li>
-                        <li>
-                            <hr class="dropdown-divider">
                         </li>
                         <li>
                             <form action="{{ route('logout') }}" method="post">
                                 @csrf
-                                <button class="dropdown-item" type="submit">
-                                    <div class="d-flex align-items-center">
-                                        <div class=""><i class="bi bi-box-arrow-right"></i></div>
-                                        <div class="ms-3"><span>{{ __('system.logout') }}</span></div>
-                                    </div>
+                                <button class="dropdown-item text-danger" type="submit">
+                                    <i class="bi bi-box-arrow-right"></i> Keluar
                                 </button>
                             </form>
                         </li>

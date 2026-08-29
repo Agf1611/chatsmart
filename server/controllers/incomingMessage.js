@@ -1,5 +1,5 @@
 const axios = require("axios");
-const { generateWAMessageFromContent, proto } = require("@whiskeysockets/baileys");
+const { generateWAMessageFromContent, jidNormalizedUser, proto } = require("@whiskeysockets/baileys");
 const { parseIncomingMessage, formatReceipt, prepareMediaMessage } = require("../lib/helper");
 const {
   isExistsEqualCommand,
@@ -19,60 +19,80 @@ const {
 require("dotenv").config();
 
 const PERSISTENT_MENU_ITEMS = [
-  "daftar pemasangan",
-  "lihat paket",
-  "voucher hotspot",
-  "cek tagihan",
-  "cara bayar",
-  "lapor gangguan",
-  "restart modem",
+  { key: "daftar pemasangan", label: "Daftar pemasangan" },
+  { key: "lihat paket", label: "Lihat paket" },
+  { key: "voucher hotspot", label: "Voucher hotspot" },
+  { key: "cek tagihan", label: "Cek tagihan" },
+  { key: "cara bayar", label: "Cara bayar" },
+  { key: "lapor gangguan", label: "Lapor gangguan" },
+  { key: "restart modem", label: "Restart modem" },
 ];
 
 const BOT_OUTGOING_MESSAGE_IDS = new Map();
+const RECENT_STRUCTURED_BOT_SENDS = new Map();
+const RECENT_INCOMING_MESSAGE_IDS = new Map();
+const RECENT_INCOMING_COMMANDS = new Map();
 
 function buildProtoListMessage(replyPayload) {
-  const rows = Array.isArray(replyPayload?.sections)
-    ? replyPayload.sections.flatMap((section) =>
-        Array.isArray(section?.rows)
-          ? section.rows.map((row, index) => ({
-              title: row?.title ? String(row.title) : `Opsi ${index + 1}`,
-              rowId: row?.rowId ? String(row.rowId) : `row-${index + 1}`,
-              description: row?.description ? String(row.description) : "",
-            }))
-          : []
-      )
+  const normalizedSections = Array.isArray(replyPayload?.sections)
+    ? replyPayload.sections
+        .map((section, sectionIndex) => {
+          const rows = Array.isArray(section?.rows)
+            ? section.rows
+                .map((row, rowIndex) => ({
+                  title: row?.title ? String(row.title) : `Opsi ${rowIndex + 1}`,
+                  rowId: row?.rowId ? String(row.rowId) : `row-${sectionIndex + 1}-${rowIndex + 1}`,
+                  description: row?.description ? String(row.description) : "",
+                }))
+                .filter((row) => row.title)
+            : [];
+
+          if (rows.length === 0) {
+            return null;
+          }
+
+          return {
+            title: section?.title ? String(section.title) : `Pilihan ${sectionIndex + 1}`,
+            rows,
+          };
+        })
+        .filter(Boolean)
     : [];
 
-  const primaryButtons = rows.slice(0, 3).map((row, index) => ({
-    buttonId: row.rowId || `button-${index + 1}`,
-    buttonText: { displayText: row.title || `Opsi ${index + 1}` },
-    type: proto.Message.ButtonsMessage.Button.Type.RESPONSE,
-  }));
-
-  const remainingRows = rows.slice(3).map((row) => row.title).filter(Boolean);
-  const lines = [];
-  const title = replyPayload?.title ? String(replyPayload.title).trim() : "";
-  const text = replyPayload?.text ? String(replyPayload.text).trim() : "";
-
-  if (title) {
-    lines.push(title);
+  if (normalizedSections.length === 0) {
+    return null;
   }
 
-  if (text) {
-    lines.push(text);
-  }
-
-  if (remainingRows.length > 0) {
-    lines.push("");
-    lines.push(`Pilihan lain: ${remainingRows.join(", ")}`);
-  }
+  const nativeFlowParams = {
+    title: replyPayload?.title ? String(replyPayload.title) : "Pilih Menu",
+    sections: normalizedSections.map((section) => ({
+      title: section.title,
+      rows: section.rows.map((row) => ({
+        id: row.rowId,
+        title: row.title,
+        description: row.description || "",
+      })),
+    })),
+  };
 
   return proto.Message.fromObject({
     buttonsMessage: {
-      contentText: lines.join("\n").trim(),
+      contentText: replyPayload?.text ? String(replyPayload.text) : "",
       footerText: replyPayload?.footer ? String(replyPayload.footer) : "",
       headerType: proto.Message.ButtonsMessage.HeaderType.EMPTY,
-      buttons: primaryButtons,
+      buttons: [
+        {
+          buttonId: "native-flow-menu",
+          buttonText: {
+            displayText: replyPayload?.buttonText ? String(replyPayload.buttonText) : "Pilih Menu",
+          },
+          type: proto.Message.ButtonsMessage.Button.Type.NATIVE_FLOW,
+          nativeFlowInfo: {
+            name: "single_select",
+            paramsJson: JSON.stringify(nativeFlowParams),
+          },
+        },
+      ],
     },
   });
 }
@@ -100,6 +120,14 @@ function buildProtoButtonsMessage(replyPayload) {
   });
 }
 
+function hasNativeFlowButton(replyPayload) {
+  return Array.isArray(replyPayload?.buttons)
+    && replyPayload.buttons.some((button) =>
+      Number(button?.type) === Number(proto.Message.ButtonsMessage.Button.Type.NATIVE_FLOW)
+      || button?.nativeFlowInfo
+    );
+}
+
 function buildProtoInteractiveMessage(replyPayload) {
   if (!replyPayload || typeof replyPayload !== "object" || Array.isArray(replyPayload)) {
     return null;
@@ -117,7 +145,17 @@ function buildProtoInteractiveMessage(replyPayload) {
 }
 
 function resolveReplyTargetJid(message) {
-  return String(message?.key?.remoteJid || "");
+  const key = message?.key || {};
+  const remoteJid = String(key.remoteJid || "").trim();
+  if (!remoteJid || remoteJid.endsWith("@g.us") || remoteJid.endsWith("@broadcast")) {
+    return remoteJid;
+  }
+
+  const phoneJid = [key.participantPn, key.senderPn, key.participant, remoteJid]
+    .map((value) => jidNormalizedUser(String(value || "").trim()))
+    .find((value) => value.endsWith("@s.whatsapp.net"));
+
+  return phoneJid || remoteJid;
 }
 
 function shouldReplyToContext(replyWhen, remoteJid) {
@@ -134,6 +172,10 @@ function shouldReplyToContext(replyWhen, remoteJid) {
   }
 
   return false;
+}
+
+function isGroupChat(remoteJid) {
+  return String(remoteJid || "").includes("@g.us");
 }
 
 function trackBotOutgoingMessage(messageId) {
@@ -166,6 +208,106 @@ function pruneBotOutgoingMessages() {
       BOT_OUTGOING_MESSAGE_IDS.delete(messageId);
     }
   }
+
+  const structuredCutoff = Date.now() - 30 * 1000;
+  for (const [jid, timestamp] of RECENT_STRUCTURED_BOT_SENDS.entries()) {
+    if (timestamp < structuredCutoff) {
+      RECENT_STRUCTURED_BOT_SENDS.delete(jid);
+    }
+  }
+
+  const incomingMessageCutoff = Date.now() - 5 * 60 * 1000;
+  for (const [messageId, timestamp] of RECENT_INCOMING_MESSAGE_IDS.entries()) {
+    if (timestamp < incomingMessageCutoff) {
+      RECENT_INCOMING_MESSAGE_IDS.delete(messageId);
+    }
+  }
+
+  const incomingCommandCutoff = Date.now() - 15 * 1000;
+  for (const [commandKey, timestamp] of RECENT_INCOMING_COMMANDS.entries()) {
+    if (timestamp < incomingCommandCutoff) {
+      RECENT_INCOMING_COMMANDS.delete(commandKey);
+    }
+  }
+}
+
+function trackRecentStructuredBotSend(remoteJid) {
+  if (!remoteJid) {
+    return;
+  }
+
+  RECENT_STRUCTURED_BOT_SENDS.set(String(remoteJid), Date.now());
+}
+
+function isRecentStructuredBotSend(remoteJid) {
+  if (!remoteJid) {
+    return false;
+  }
+
+  const timestamp = RECENT_STRUCTURED_BOT_SENDS.get(String(remoteJid));
+  if (!timestamp) {
+    return false;
+  }
+
+  RECENT_STRUCTURED_BOT_SENDS.delete(String(remoteJid));
+  return Date.now() - timestamp <= 30 * 1000;
+}
+
+function isDuplicateIncomingMessageId(messageId) {
+  if (!messageId) {
+    return false;
+  }
+
+  const key = String(messageId);
+  const timestamp = RECENT_INCOMING_MESSAGE_IDS.get(key);
+  if (!timestamp) {
+    return false;
+  }
+
+  return Date.now() - timestamp <= 5 * 60 * 1000;
+}
+
+function trackIncomingMessageId(messageId) {
+  if (!messageId) {
+    return;
+  }
+
+  RECENT_INCOMING_MESSAGE_IDS.set(String(messageId), Date.now());
+}
+
+function buildIncomingCommandKey(chatIdentity, command, messageType) {
+  const normalizedChatIdentity = String(chatIdentity || "").trim();
+  const normalizedCommand = String(command || "").trim().toLowerCase();
+  const normalizedMessageType = String(messageType || "").trim();
+
+  if (!normalizedChatIdentity || !normalizedCommand) {
+    return "";
+  }
+
+  return `${normalizedChatIdentity}::${normalizedMessageType}::${normalizedCommand}`;
+}
+
+function isDuplicateIncomingCommand(chatIdentity, command, messageType) {
+  const key = buildIncomingCommandKey(chatIdentity, command, messageType);
+  if (!key) {
+    return false;
+  }
+
+  const timestamp = RECENT_INCOMING_COMMANDS.get(key);
+  if (!timestamp) {
+    return false;
+  }
+
+  return Date.now() - timestamp <= 8 * 1000;
+}
+
+function trackIncomingCommand(chatIdentity, command, messageType) {
+  const key = buildIncomingCommandKey(chatIdentity, command, messageType);
+  if (!key) {
+    return;
+  }
+
+  RECENT_INCOMING_COMMANDS.set(key, Date.now());
 }
 
 function getCurrentRuleDateParts() {
@@ -257,6 +399,30 @@ function normalizePhoneNumber(value) {
   return digits;
 }
 
+function normalizeCustomerName(pushName) {
+  return String(pushName || "").replace(/\s+/g, " ").trim();
+}
+
+function buildCustomerDisplayName(pushName) {
+  const name = normalizeCustomerName(pushName);
+  return name ? `Kak ${name}` : "Kak";
+}
+
+function resolveMenuShortcut(command) {
+  const normalizedCommand = String(command || "").trim().toLowerCase();
+  const match = normalizedCommand.match(/^([1-7])(?:[\).\-\s].*)?$/);
+  if (!match) {
+    return null;
+  }
+
+  const selectedItem = PERSISTENT_MENU_ITEMS[Number(match[1]) - 1];
+  return selectedItem ? selectedItem.key : null;
+}
+
+function resolveIncomingCommand(command) {
+  return resolveMenuShortcut(command) || String(command || "").trim().toLowerCase();
+}
+
 function isResumeBotCommand(command) {
   const normalizedCommand = String(command || "").trim().toLowerCase();
   return normalizedCommand === "menu";
@@ -331,19 +497,25 @@ function attachMenuButton(replyPayload) {
   return replyPayload;
 }
 
-function buildPersistentMenuPayload() {
+function buildPersistentMenuPayload(pushName) {
+  const name = buildCustomerDisplayName(pushName);
   return {
-    text: "Silakan pilih menu yang Anda butuhkan ya.",
+    text:
+      `Halo ${name}, silakan pilih kebutuhan Kakak dengan balas angka di bawah ini ya.\n\n` +
+      "Contoh:\n" +
+      "- Balas *1* untuk daftar pemasangan\n" +
+      "- Balas *3* untuk voucher hotspot\n" +
+      "- Balas *6* untuk lapor gangguan",
     footer: "",
     title: "Menu SICKAS WiFi",
-    buttonText: "Pilih Menu",
+    buttonText: "Lihat Menu",
     sections: [
       {
         title: "Layanan Utama",
-        rows: PERSISTENT_MENU_ITEMS.map((item) => ({
-          title: item,
-          rowId: item,
-          description: "",
+        rows: PERSISTENT_MENU_ITEMS.map((item, index) => ({
+          title: `${index + 1}. ${item.label}`,
+          rowId: item.key,
+          description: `Balas ${index + 1}`,
         })),
       },
     ],
@@ -364,6 +536,10 @@ function shouldSendPersistentMenu(matchedReply, replyPayload, remoteJid) {
   }
 
   if (Array.isArray(replyPayload?.sections)) {
+    return false;
+  }
+
+  if (hasNativeFlowButton(replyPayload)) {
     return false;
   }
 
@@ -425,7 +601,7 @@ function shouldPauseForOperatorHandoff(matchedReply, command) {
 }
 
 function buildRegistrationThankYouPayload(pushName) {
-  const name = pushName || "";
+  const name = buildCustomerDisplayName(pushName);
   return {
     text:
       `Halo ${name}, terima kasih sudah mendaftar di *SICKAS WiFi - BUMDes SICKAS*.\n\n` +
@@ -434,7 +610,7 @@ function buildRegistrationThankYouPayload(pushName) {
 }
 
 function buildTroubleshootingReply(pushName) {
-  const name = pushName || "";
+  const name = buildCustomerDisplayName(pushName);
   return {
     text:
       `Halo ${name}, silakan coba pengecekan berikut ya:\n` +
@@ -458,7 +634,7 @@ function shouldUseTroubleshootingReply(matchedReply) {
 }
 
 function buildPaymentConfirmationPayload(pushName) {
-  const name = pushName || "";
+  const name = buildCustomerDisplayName(pushName);
   return {
     text:
       `Halo ${name}, terima kasih. Jika pembayaran sudah dilakukan, silakan tunggu proses pengecekan ya.\n\n` +
@@ -562,7 +738,8 @@ function interactivePayloadToText(replyPayload) {
       rows.forEach((row, index) => {
         const rowTitle = row?.title ? String(row.title).trim() : `Opsi ${index + 1}`;
         const rowDescription = row?.description ? String(row.description).trim() : "";
-        lines.push(`${index + 1}. ${rowTitle}${rowDescription ? ` - ${rowDescription}` : ""}`);
+        const linePrefix = /^\d+[\.\)]\s+/.test(rowTitle) ? "" : `${index + 1}. `;
+        lines.push(`${linePrefix}${rowTitle}${rowDescription ? ` - ${rowDescription}` : ""}`);
       });
     });
   }
@@ -671,6 +848,10 @@ function inferHistoryType(payload, matchedReply) {
   }
 
   if (Array.isArray(payload.buttons)) {
+    if (hasNativeFlowButton(payload)) {
+      return "list";
+    }
+
     return "button";
   }
 
@@ -732,6 +913,7 @@ function isTextLikeMessage(messageType, command) {
     "extendedTextMessage",
     "buttonsResponseMessage",
     "listResponseMessage",
+    "interactiveResponseMessage",
     "templateButtonReplyMessage",
     "imageMessage",
     "videoMessage",
@@ -785,6 +967,12 @@ async function sendAutoReply(sock, message, replyPayload, shouldQuote) {
   const targetJid = resolveReplyTargetJid(message);
   const quotedMessage = shouldQuote && targetJid === message.key.remoteJid ? message : undefined;
 
+  console.log("[autoreply] resolved-target", {
+    incomingJid: message?.key?.remoteJid || null,
+    senderPn: message?.key?.senderPn || message?.key?.participantPn || null,
+    targetJid,
+  });
+
   if (typeof replyPayload === "string") {
       const response = await sock.sendMessage(
         targetJid,
@@ -832,7 +1020,7 @@ async function sendAutoReply(sock, message, replyPayload, shouldQuote) {
 
   const protoContent = buildProtoInteractiveMessage(replyPayload);
   if (protoContent) {
-    if (targetJid.endsWith("@lid") && Array.isArray(replyPayload?.sections)) {
+    if (Array.isArray(replyPayload?.sections)) {
       const previewPayload = interactivePayloadToText(replyPayload);
       if (previewPayload?.text) {
         const previewResponse = await sock.sendMessage(
@@ -853,6 +1041,7 @@ async function sendAutoReply(sock, message, replyPayload, shouldQuote) {
       messageId: generatedMessage.key.id,
     });
     trackBotOutgoingMessage(generatedMessage.key.id);
+    trackRecentStructuredBotSend(message?.key?.remoteJid || targetJid);
     return true;
   }
 
@@ -878,6 +1067,10 @@ const IncomingMessage = async (upsert, sock) => {
 
     if (message?.key?.fromMe) {
       if (isBotOutgoingMessage(message?.key?.id)) {
+        return;
+      }
+
+      if (isRecentStructuredBotSend(message?.key?.remoteJid)) {
         return;
       }
 
@@ -912,14 +1105,46 @@ const IncomingMessage = async (upsert, sock) => {
       return;
     }
 
+    if (isGroupChat(message?.key?.remoteJid)) {
+      console.log("[autoreply] skipped-group-chat", {
+        remoteJid: message?.key?.remoteJid || null,
+        messageId: message?.key?.id || null,
+      });
+      return;
+    }
+
+    const incomingMessageId = String(message?.key?.id || "").trim();
+    if (isDuplicateIncomingMessageId(incomingMessageId)) {
+      console.log("[autoreply] duplicate-message-skipped", {
+        messageId: incomingMessageId,
+        remoteJid: message?.key?.remoteJid || null,
+      });
+      return;
+    }
+    trackIncomingMessageId(incomingMessageId);
+
     const participant = message.key.participant ? formatReceipt(message.key.participant) : undefined;
-    const { command, bufferImage, from, messageType, senderJid } = await parseIncomingMessage(message);
+    const { command: rawCommand, bufferImage, from, messageType, senderJid } = await parseIncomingMessage(message);
+    const command = resolveIncomingCommand(rawCommand);
     const pushName = message.pushName || "";
+    const customerDisplayName = buildCustomerDisplayName(pushName);
     const deviceBody = String(sock.user.id).split(":")[0];
     const chatIdentity = participant || message.key.remoteJid;
     const senderNumber = participant ? participant.replace("@s.whatsapp.net", "") : extractSenderNumber(message, senderJid || from);
     const isFirstChat = !(await hasIncomingMessageLog(deviceBody, chatIdentity));
     const isPausedForOperator = await isContactPaused(deviceBody, chatIdentity);
+
+    if (isDuplicateIncomingCommand(chatIdentity, rawCommand, messageType)) {
+      console.log("[autoreply] duplicate-command-skipped", {
+        deviceBody,
+        chatIdentity,
+        rawCommand,
+        messageType,
+        messageId: incomingMessageId || null,
+      });
+      return;
+    }
+    trackIncomingCommand(chatIdentity, rawCommand, messageType);
 
     if (isPaymentProofMessage(messageType, command)) {
       await saveIncomingMessageLog(deviceBody, chatIdentity);
@@ -932,7 +1157,7 @@ const IncomingMessage = async (upsert, sock) => {
     }
 
     if (isMenuCommand(command)) {
-      const menuPayload = buildPersistentMenuPayload();
+      const menuPayload = buildPersistentMenuPayload(pushName);
       await sendAutoReply(sock, message, menuPayload, false);
       try {
         await saveAutoReplyHistory(
@@ -952,7 +1177,7 @@ const IncomingMessage = async (upsert, sock) => {
       console.log("[autoreply] direct-menu-sent", {
         deviceBody,
         chatIdentity,
-        command,
+        command: rawCommand,
       });
       return true;
     }
@@ -960,7 +1185,7 @@ const IncomingMessage = async (upsert, sock) => {
     if (isRegistrationSubmissionMessage(command)) {
       const registrationPayload = buildRegistrationThankYouPayload(pushName);
       await sendAutoReply(sock, message, registrationPayload, false);
-      await sendAutoReply(sock, message, buildPersistentMenuPayload(), false);
+      await sendAutoReply(sock, message, buildPersistentMenuPayload(pushName), false);
       await saveIncomingMessageLog(deviceBody, chatIdentity);
       console.log("[autoreply] registration-thankyou", {
         deviceBody,
@@ -1013,6 +1238,7 @@ const IncomingMessage = async (upsert, sock) => {
       from,
       senderNumber,
       command,
+      rawCommand,
       messageType,
       isFirstChat,
       matchedFirstChat: Boolean(matchedFirstChatReply),
@@ -1132,7 +1358,7 @@ const IncomingMessage = async (upsert, sock) => {
     }
 
     const contextualPayload = normalizeReplyPayloadForContext(replyPayload, matchedReply, pushName);
-    const finalPayload = replaceTemplateVariables(contextualPayload, pushName);
+    const finalPayload = replaceTemplateVariables(contextualPayload, customerDisplayName);
     const transportDecision = resolveTransportPayload(finalPayload, message.key.remoteJid, matchedReply);
     const transportPayload = attachMenuButton(transportDecision.payload);
     if (transportDecision.mode === "fallback_text") {
@@ -1147,10 +1373,11 @@ const IncomingMessage = async (upsert, sock) => {
 
     await sendAutoReply(sock, message, transportPayload, shouldQuote);
     if (shouldSendPersistentMenu(matchedReply, transportPayload, message.key.remoteJid)) {
-      await sendAutoReply(sock, message, buildPersistentMenuPayload(), false);
+      await sendAutoReply(sock, message, buildPersistentMenuPayload(pushName), false);
       console.log("[autoreply] persistent-menu-sent", {
         deviceBody,
         command,
+        rawCommand,
         ruleId: matchedReply?.id || null,
       });
     }
@@ -1191,6 +1418,7 @@ const IncomingMessage = async (upsert, sock) => {
     console.log("[autoreply] reply-sent", {
       deviceBody,
       command,
+      rawCommand,
       source: replySource,
       transportPolicy: transportDecision.policy,
       transportMode: transportDecision.mode,

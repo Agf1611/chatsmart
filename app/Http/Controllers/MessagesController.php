@@ -94,6 +94,10 @@ class MessagesController extends Controller
                     'message' => $request->message ? $request->message : ($request->caption ? $request->caption : ''),
                     'payload' => json_encode($request->all()),
                     'status' => $isSent ? 'success' : 'failed',
+                    'whatsapp_message_id' => data_get($messageSent, 'data.key.id'),
+                    'resolved_jid' => data_get($messageSent, 'data.key.remoteJid'),
+                    'delivery_status' => $isSent ? 'pending' : 'failed',
+                    'sent_at' => $isSent ? now() : null,
                     'type' => $request->type,
                     'send_by' => 'web',
                     'note' => $note,
@@ -107,6 +111,7 @@ class MessagesController extends Controller
         }
 
         MessageHistory::insert($dataForBatchInput);
+        MessageHistory::syncRecentDeliveryReceipts();
         $this->deviceRepository->incrementMessageSent($device->id, $success);
         return backWithFlash(
             $success > 0 ? 'success' : 'danger',

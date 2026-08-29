@@ -1,176 +1,216 @@
-<x-layout-dashboard title="AI Conversations">
-    <div class="page-breadcrumb d-none d-sm-flex align-items-center mb-3">
-        <div class="breadcrumb-title pe-3">Whatsapp</div>
-        <div class="ps-3">
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb mb-0 p-0">
-                    <li class="breadcrumb-item"><a href="javascript:;"><i class="bx bx-home-alt"></i></a></li>
-                    <li class="breadcrumb-item active" aria-current="page">AI Conversations</li>
-                </ol>
-            </nav>
-        </div>
-    </div>
+<x-layout-dashboard title="Histori AI">
+    <div class="cs-page-stack cs-conversations-page">
+        @if (session()->has('alert'))
+            <x-alert>
+                @slot('type', session('alert')['type'])
+                @slot('msg', session('alert')['msg'])
+            </x-alert>
+        @endif
 
-    @if (session()->has('alert'))
-        <x-alert>
-            @slot('type', session('alert')['type'])
-            @slot('msg', session('alert')['msg'])
-        </x-alert>
-    @endif
+        @if (isset($errors) && $errors->any())
+            <div class="alert alert-danger cs-inline-alert mb-0">{{ $errors->first() }}</div>
+        @endif
 
-    <div class="section-hero-card mb-4">
-        <div class="row g-4 align-items-center">
-            <div class="col-xl-7">
-                <div class="d-flex gap-3 align-items-start">
-                    <div class="hero-icon">
-                        <i class="bx bx-conversation"></i>
-                    </div>
-                    <div>
-                        <h3 class="mb-2">AI Conversations</h3>
-                        <p class="hero-meta mb-0">
-                            Pantau semua percakapan AI per kontak, device, dan bot agar alur otomatis tetap aman,
-                            jelas, dan mudah diintervensi saat dibutuhkan.
-                        </p>
-                    </div>
-                </div>
+        <section class="cs-page-header">
+            <div>
+                <span class="cs-eyebrow">AI Workspace</span>
+                <h1>Histori percakapan</h1>
+                <p>Pantau balasan bot, ambil alih chat, dan bersihkan histori lama agar penyimpanan tetap terjaga.</p>
             </div>
-            <div class="col-xl-5">
-                <div class="hero-metrics">
-                    <div class="hero-metric">
-                        <span>Total conversation</span>
-                        <strong>{{ $conversations->total() }}</strong>
-                    </div>
-                    <div class="hero-metric">
-                        <span>Bot tersedia</span>
-                        <strong>{{ $bots->count() }}</strong>
-                    </div>
-                    <div class="hero-metric">
-                        <span>Device tersedia</span>
-                        <strong>{{ $devices->count() }}</strong>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <div class="card smart-filter-card mb-3">
-        <div class="card-body">
-            <form method="GET" action="{{ route('ai-conversations.index') }}" class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label">Cari kontak / isi chat</label>
-                    <input type="text" name="search" class="form-control" value="{{ request('search') }}" placeholder="Nama, nomor, atau pesan">
+            <form method="POST" action="{{ route('ai-conversations.cleanup') }}" class="cs-cleanup-form"
+                onsubmit="return confirm('Hapus permanen percakapan dan seluruh pesan yang lebih lama dari periode ini?')">
+                @csrf
+                @method('DELETE')
+                <label for="older_than_days">Bersihkan histori</label>
+                <div>
+                    <select name="older_than_days" id="older_than_days" class="form-select" required>
+                        <option value="30">Lebih dari 30 hari</option>
+                        <option value="60" selected>Lebih dari 60 hari</option>
+                        <option value="90">Lebih dari 90 hari</option>
+                        <option value="180">Lebih dari 180 hari</option>
+                    </select>
+                    <button type="submit" class="btn btn-outline-danger">
+                        <i class="bi bi-trash3"></i> Bersihkan
+                    </button>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Device</label>
-                    <select name="device_id" class="form-select">
-                        <option value="">Semua</option>
+            </form>
+        </section>
+
+        <section class="cs-ai-stats" aria-label="Ringkasan histori AI">
+            <article><span>Total chat</span><strong>{{ number_format($conversationStats['total']) }}</strong></article>
+            <article><span>Bot aktif</span><strong>{{ number_format($conversationStats['active']) }}</strong></article>
+            <article><span>Dipause</span><strong>{{ number_format($conversationStats['paused']) }}</strong></article>
+            <article><span>Pesan tersimpan</span><strong>{{ number_format($conversationStats['messages']) }}</strong></article>
+        </section>
+
+        @php
+            $hasFilters = request()->filled('search') || request()->filled('device_id')
+                || request()->filled('ai_bot_id') || request()->filled('status');
+        @endphp
+        <details class="cs-filter-panel" {{ $hasFilters ? 'open' : '' }}>
+            <summary>
+                <span><i class="bi bi-funnel"></i> Cari dan filter</span>
+                @if ($hasFilters)<span class="cs-filter-active">Filter aktif</span>@endif
+                <i class="bi bi-chevron-down"></i>
+            </summary>
+            <form method="GET" action="{{ route('ai-conversations.index') }}" class="cs-filter-grid">
+                <div class="cs-filter-search">
+                    <label for="search">Kontak atau isi chat</label>
+                    <div class="cs-input-icon">
+                        <i class="bi bi-search"></i>
+                        <input type="search" id="search" name="search" class="form-control"
+                            value="{{ request('search') }}" placeholder="Nama, nomor, atau pesan">
+                    </div>
+                </div>
+                <div>
+                    <label for="device_id">Perangkat</label>
+                    <select name="device_id" id="device_id" class="form-select">
+                        <option value="">Semua perangkat</option>
                         @foreach ($devices as $device)
-                            <option value="{{ $device->id }}" {{ (string) request('device_id') === (string) $device->id ? 'selected' : '' }}>
+                            <option value="{{ $device->id }}" @selected((string) request('device_id') === (string) $device->id)>
                                 {{ $device->body }}
                             </option>
                         @endforeach
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">AI Bot</label>
-                    <select name="ai_bot_id" class="form-select">
-                        <option value="">Semua</option>
+                <div>
+                    <label for="ai_bot_id">AI Bot</label>
+                    <select name="ai_bot_id" id="ai_bot_id" class="form-select">
+                        <option value="">Semua bot</option>
                         @foreach ($bots as $bot)
-                            <option value="{{ $bot->id }}" {{ (string) request('ai_bot_id') === (string) $bot->id ? 'selected' : '' }}>
+                            <option value="{{ $bot->id }}" @selected((string) request('ai_bot_id') === (string) $bot->id)>
                                 {{ $bot->name }}
                             </option>
                         @endforeach
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Status</label>
-                    <select name="status" class="form-select">
-                        <option value="">Semua</option>
-                        <option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>Active</option>
-                        <option value="paused" {{ request('status') === 'paused' ? 'selected' : '' }}>Paused</option>
+                <div>
+                    <label for="status">Status</label>
+                    <select name="status" id="status" class="form-select">
+                        <option value="">Semua status</option>
+                        <option value="active" @selected(request('status') === 'active')>Aktif</option>
+                        <option value="paused" @selected(request('status') === 'paused')>Dipause</option>
                     </select>
                 </div>
-                <div class="col-12 toolbar-actions">
-                    <button type="submit" class="btn btn-outline-primary btn-sm">Filter</button>
-                    <a href="{{ route('ai-conversations.index') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
+                <div class="cs-filter-actions">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Terapkan</button>
+                    @if ($hasFilters)
+                        <a href="{{ route('ai-conversations.index') }}" class="btn btn-outline-secondary">Reset</a>
+                    @endif
                 </div>
             </form>
-        </div>
-    </div>
+        </details>
 
-    <div class="card smart-list-card table-shell">
-        <div class="card-header bg-transparent py-3">
-            <div class="smart-table-toolbar">
+        <section class="cs-conversation-section">
+            <div class="cs-list-heading">
                 <div>
-                    <h5 class="smart-table-title">Daftar Percakapan AI</h5>
-                    <p class="text-muted mb-0 small">Lihat status aktif, pesan terakhir user, dan output terakhir dari bot pada setiap chat.</p>
+                    <h2>Daftar percakapan</h2>
+                    <p>{{ number_format($conversations->total()) }} chat sesuai filter</p>
                 </div>
-                <span class="small text-muted">{{ $conversations->total() }} conversation</span>
             </div>
-        </div>
-        <div class="card-body">
-            @if ($conversations->count() === 0)
-                <div class="smart-empty">Belum ada conversation AI yang tercatat.</div>
+
+            @if ($conversations->isEmpty())
+                <div class="cs-empty-state cs-panel">
+                    <span><i class="bi bi-chat-square-dots"></i></span>
+                    <strong>Belum ada percakapan</strong>
+                    <p>Histori akan muncul setelah AI Bot menerima dan membalas pesan.</p>
+                </div>
             @else
-                <div class="table-responsive">
-                    <table class="table align-middle table-hover">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Kontak</th>
-                                <th>Bot</th>
-                                <th>Device</th>
-                                <th>Status</th>
-                                <th>Pesan Terakhir</th>
-                                <th>Balasan Bot</th>
-                                <th class="text-end">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($conversations as $conversation)
-                                <tr>
-                                    <td>
-                                        <div class="fw-semibold">{{ $conversation->contact_name ?: $conversation->chat_jid }}</div>
-                                        <div class="small text-muted">{{ $conversation->chat_jid }}</div>
-                                    </td>
-                                    <td>{{ optional($conversation->bot)->name ?: '-' }}</td>
-                                    <td>{{ optional($conversation->device)->body ?: '-' }}</td>
-                                    <td>
-                                        <span class="badge bg-{{ $conversation->status === 'active' ? 'success' : 'warning text-dark' }}">
-                                            {{ ucfirst($conversation->status) }}
+                <div class="cs-conversation-list">
+                    @foreach ($conversations as $conversation)
+                        @php
+                            $displayName = $conversation->contact_name ?: preg_replace('/@.*$/', '', $conversation->chat_jid);
+                            $isActive = $conversation->status === 'active';
+                            $lastActivity = $conversation->last_message_at ?: $conversation->updated_at;
+                        @endphp
+                        <article class="cs-conversation-card">
+                            <div class="cs-conversation-top">
+                                <span class="cs-contact-avatar">{{ strtoupper(\Illuminate\Support\Str::substr($displayName, 0, 1)) }}</span>
+                                <div class="cs-contact-copy">
+                                    <div>
+                                        <h3>{{ $displayName }}</h3>
+                                        <span class="cs-status-pill {{ $isActive ? 'is-connected' : 'is-paused' }}">
+                                            <span></span>{{ $isActive ? 'Bot aktif' : 'Dipause' }}
                                         </span>
-                                        @if ($conversation->paused_reason)
-                                            <div class="small text-muted mt-2">
-                                                <strong>Sumber pause:</strong> {{ $conversation->paused_reason }}
-                                            </div>
-                                        @endif
-                                    </td>
-                                    <td class="small text-muted">{{ \Illuminate\Support\Str::limit($conversation->last_user_message, 80) ?: '-' }}</td>
-                                    <td class="small text-muted">{{ \Illuminate\Support\Str::limit($conversation->last_bot_message, 80) ?: '-' }}</td>
-                                    <td class="text-end">
-                                        @if ($conversation->status === 'active')
-                                            <form method="POST" action="{{ route('ai-conversations.pause', $conversation->id) }}">
+                                    </div>
+                                    <p>{{ $conversation->chat_jid }}</p>
+                                </div>
+                                <div class="dropdown cs-card-menu">
+                                    <button class="btn cs-icon-btn" type="button" data-bs-toggle="dropdown"
+                                        aria-expanded="false" aria-label="Aksi percakapan {{ $displayName }}">
+                                        <i class="bi bi-three-dots"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            @if ($isActive)
+                                                <form method="POST" action="{{ route('ai-conversations.pause', $conversation) }}">
+                                                    @csrf
+                                                    <button type="submit" class="dropdown-item"><i class="bi bi-pause-circle"></i> Pause bot</button>
+                                                </form>
+                                            @else
+                                                <form method="POST" action="{{ route('ai-conversations.resume', $conversation) }}">
+                                                    @csrf
+                                                    <button type="submit" class="dropdown-item"><i class="bi bi-play-circle"></i> Aktifkan bot</button>
+                                                </form>
+                                            @endif
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form method="POST" action="{{ route('ai-conversations.destroy', $conversation) }}"
+                                                onsubmit="return confirm('Hapus permanen histori chat {{ addslashes($displayName) }} dan seluruh pesannya?')">
                                                 @csrf
-                                                <button type="submit" class="btn btn-outline-warning btn-sm">Pause Bot</button>
+                                                @method('DELETE')
+                                                <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash3"></i> Hapus histori</button>
                                             </form>
-                                        @else
-                                            <form method="POST" action="{{ route('ai-conversations.resume', $conversation->id) }}">
-                                                @csrf
-                                                <button type="submit" class="btn btn-outline-success btn-sm">Resume Bot</button>
-                                            </form>
-                                        @endif
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="cs-conversation-meta">
+                                <span><i class="bi bi-stars"></i>{{ optional($conversation->bot)->name ?: 'Bot tidak tersedia' }}</span>
+                                <span><i class="bi bi-phone"></i>{{ optional($conversation->device)->body ?: '-' }}</span>
+                                <span><i class="bi bi-chat-dots"></i>{{ number_format($conversation->messages_count) }} pesan</span>
+                            </div>
+
+                            <div class="cs-message-preview">
+                                <div>
+                                    <span>Pelanggan</span>
+                                    <p>{{ \Illuminate\Support\Str::limit($conversation->last_user_message, 120) ?: 'Belum ada pesan pelanggan.' }}</p>
+                                </div>
+                                <div class="is-bot">
+                                    <span>Balasan bot</span>
+                                    <p>{{ \Illuminate\Support\Str::limit($conversation->last_bot_message, 120) ?: 'Belum ada balasan bot.' }}</p>
+                                </div>
+                            </div>
+
+                            @if ($conversation->paused_reason)
+                                <div class="cs-pause-note"><i class="bi bi-info-circle"></i>{{ $conversation->paused_reason }}</div>
+                            @endif
+
+                            <footer class="cs-conversation-footer">
+                                <span><i class="bi bi-clock"></i>{{ $lastActivity ? $lastActivity->diffForHumans() : 'Belum aktif' }}</span>
+                                @if ($isActive)
+                                    <form method="POST" action="{{ route('ai-conversations.pause', $conversation) }}">
+                                        @csrf
+                                        <button type="submit" class="btn btn-outline-warning btn-sm"><i class="bi bi-pause"></i> Pause</button>
+                                    </form>
+                                @else
+                                    <form method="POST" action="{{ route('ai-conversations.resume', $conversation) }}">
+                                        @csrf
+                                        <button type="submit" class="btn btn-outline-success btn-sm"><i class="bi bi-play"></i> Aktifkan</button>
+                                    </form>
+                                @endif
+                            </footer>
+                        </article>
+                    @endforeach
                 </div>
             @endif
 
             @if ($conversations->hasPages())
-                <div class="mt-3">
-                    {{ $conversations->links() }}
-                </div>
+                <div class="cs-pagination">{{ $conversations->links() }}</div>
             @endif
-        </div>
+        </section>
     </div>
 </x-layout-dashboard>

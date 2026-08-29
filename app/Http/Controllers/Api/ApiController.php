@@ -70,6 +70,10 @@ class ApiController extends Controller
             'message' => $request->message ? $request->message : ($request->caption ? $request->caption : ''),
             'payload' => json_encode($request->all()),
             'status' => $messageSent->status ? 'success' : 'failed',
+            'whatsapp_message_id' => data_get($messageSent, 'data.key.id'),
+            'resolved_jid' => data_get($messageSent, 'data.key.remoteJid'),
+            'delivery_status' => $messageSent->status ? 'pending' : 'failed',
+            'sent_at' => $messageSent->status ? now() : null,
             'type' => $request->type,
             'send_by' => 'api',
             'created_at' => now(),
@@ -81,6 +85,7 @@ class ApiController extends Controller
     {
         $device = request()->device;
         MessageHistory::insert($prepareHistoryMessage);
+        MessageHistory::syncRecentDeliveryReceipts();
         $this->deviceRepository->incrementMessageSent($device->id, $success);
     }
 

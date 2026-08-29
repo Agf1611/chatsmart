@@ -221,15 +221,25 @@
                                         <div class="small text-muted mt-2">{{ \Illuminate\Support\Str::limit($msg->message, 70) }}</div>
                                     </td>
                                     <td>
-                                        @if ($msg->status == 'success')
-                                            <span class="badge rounded-pill bg-success">Sent</span>
-                                        @else
+                                        @if ($msg->status !== 'success' || $msg->delivery_status === 'failed')
                                             <span class="badge rounded-pill bg-danger">Failed</span>
+                                        @elseif (in_array($msg->delivery_status, ['read', 'played'], true))
+                                            <span class="badge rounded-pill bg-success">Read</span>
+                                        @elseif ($msg->delivery_status === 'delivered')
+                                            <span class="badge rounded-pill bg-success">Delivered</span>
+                                        @elseif ($msg->delivery_status === 'server_ack')
+                                            <span class="badge rounded-pill bg-info text-dark">Sent (1 tick)</span>
+                                        @elseif ($msg->delivery_status === 'pending')
+                                            <span class="badge rounded-pill bg-warning text-dark">Waiting</span>
+                                        @else
+                                            <span class="badge rounded-pill bg-secondary">Accepted</span>
                                         @endif
                                     </td>
                                     <td>
                                         @if ($msg->send_by == 'web')
                                             <span class="badge rounded-pill bg-primary">Web</span>
+                                        @elseif ($msg->send_by == 'autoreply')
+                                            <span class="badge rounded-pill bg-info text-dark">Auto Reply</span>
                                         @else
                                             <span class="badge rounded-pill bg-warning text-dark">API</span>
                                         @endif

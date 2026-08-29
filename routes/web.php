@@ -70,8 +70,10 @@ Route::middleware(['auth', 'approved'])->group(function (){
     Route::delete('/ai-bots/{aiBot:id}',[AiBotController::class,'destroy'])->name('ai-bots.delete');
     Route::post('/ai-bots/{aiBot:id}/duplicate',[AiBotController::class,'duplicate'])->name('ai-bots.duplicate');
     Route::get('/ai-conversations',[AiConversationController::class,'index'])->name('ai-conversations.index');
+    Route::delete('/ai-conversations',[AiConversationController::class,'cleanup'])->name('ai-conversations.cleanup');
     Route::post('/ai-conversations/{conversation:id}/pause',[AiConversationController::class,'pause'])->name('ai-conversations.pause');
     Route::post('/ai-conversations/{conversation:id}/resume',[AiConversationController::class,'resume'])->name('ai-conversations.resume');
+    Route::delete('/ai-conversations/{conversation:id}',[AiConversationController::class,'destroy'])->name('ai-conversations.destroy');
 
     
     

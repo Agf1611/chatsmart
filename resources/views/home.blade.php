@@ -1,11 +1,14 @@
 @php
     $deviceLimit = max((int) $user->limit_device, 1);
-    $deviceUsage = $user->limit_device > 0 ? min(100, (int) round(($user->devices_count / $deviceLimit) * 100)) : 0;
-    $welcomeFeatures = ['Mudah digunakan', 'Performa tinggi', 'Aman & terpercaya'];
+    $deviceUsage = $user->limit_device > 0
+        ? min(100, (int) round(($user->devices_count / $deviceLimit) * 100))
+        : 0;
+    $connectedDevices = (int) $user->connected_devices_count;
+    $hasSelectedDevice = $selectedDevice !== null;
 @endphp
 
 <x-layout-dashboard :title="__('system.dashboard')">
-    <div class="dashboard-shell">
+    <div class="dashboard-shell cs-dashboard">
         @if (session()->has('alert'))
             <x-alert>
                 @slot('type', session('alert')['type'])
@@ -13,479 +16,368 @@
             </x-alert>
         @endif
 
-        @if ($errors->any())
-            <div class="alert alert-danger surface-card mb-0">
-                <ul class="mb-0">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
+        @if (isset($errors) && $errors->any())
+            <div class="alert alert-danger cs-inline-alert mb-0">{{ $errors->first() }}</div>
+        @endif
+
+        @if ($dashboard['load_warning'])
+            <div class="alert alert-warning cs-inline-alert mb-0">
+                <i class="bi bi-exclamation-circle"></i> {{ $dashboard['load_warning'] }}
             </div>
         @endif
 
-        @if (!empty($operational['alerts']))
-            @foreach ($operational['alerts'] as $alert)
-                <div class="alert alert-{{ $alert['level'] }} surface-card mb-0">
-                    <strong>{{ $alert['title'] }}</strong>
-                    <div class="small mt-1">{{ $alert['message'] }}</div>
-                </div>
-            @endforeach
-        @endif
-
-        <section class="surface-card dashboard-welcome-card">
-            <button type="button" class="welcome-dismiss" data-dismiss-welcome>
-                <i class="bi bi-x-lg"></i>
-            </button>
-
-            <div class="welcome-copy">
-                <div class="welcome-badge">
-                    <i class="bi bi-info-lg"></i>
-                </div>
-                <div class="welcome-content">
-                    <h2>Selamat datang di ChatSmart v1 👋</h2>
-                    <p>Platform WhatsApp Gateway modern untuk komunikasi bisnis tanpa batas dengan dashboard yang lebih
-                        cepat, rapi, dan nyaman dipakai setiap hari.</p>
-
-                    <div class="welcome-features">
-                        @foreach ($welcomeFeatures as $feature)
-                            <span><i class="bi bi-check2"></i>{{ $feature }}</span>
-                        @endforeach
-                    </div>
-                </div>
+        <section class="cs-dashboard-header">
+            <div class="cs-dashboard-heading">
+                <span class="cs-eyebrow">Workspace hari ini</span>
+                <h1>Halo, {{ $user->username }}</h1>
+                <p>Pantau WhatsApp dan jalankan pekerjaan utama dari satu tampilan yang ringkas.</p>
             </div>
 
-            <div class="welcome-art" aria-hidden="true">
-                <div class="chat-bubble one"></div>
-                <div class="chat-bubble two"></div>
-                <div class="chat-bubble three"></div>
-                <div class="welcome-phone"></div>
-                <div class="welcome-platform"></div>
-            </div>
-        </section>
-
-        <section class="row g-4 row-cols-1 row-cols-md-2 row-cols-xl-4">
-            <div class="col">
-                <div class="surface-card stats-card">
-                    <div class="stats-card__row">
-                        <div class="stats-card__icon is-green"><i class="bi bi-phone"></i></div>
-                        <div class="flex-grow-1">
-                            <p class="stats-card__eyebrow">{{ __('system.total_devices') }}</p>
-                            <h3 class="stats-card__value">{{ $user->devices_count }}</h3>
-                            <p class="stats-card__subtext">{{ __('system.your_device_limit', ['count' => $user->limit_device]) }}</p>
-                            <div class="usage-progress"><span style="width: {{ $deviceUsage }}%"></span></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col">
-                <div class="surface-card stats-card">
-                    <div class="stats-card__row">
-                        <div class="stats-card__icon is-yellow"><i class="bi bi-broadcast"></i></div>
-                        <div class="flex-grow-1">
-                            <p class="stats-card__eyebrow">{{ __('system.blast_bulk') }}</p>
-                            <div class="stats-badges">
-                                <span class="badge bg-warning text-dark">{{ $user->blasts_pending }} {{ __('system.wait') }}</span>
-                                <span class="badge bg-success">{{ $user->blasts_success }} {{ __('system.sent') }}</span>
-                                <span class="badge bg-danger">{{ $user->blasts_failed }} {{ __('system.fail') }}</span>
-                            </div>
-                            <p class="stats-card__subtext">{{ __('system.from_campaigns', ['count' => $user->campaigns_count]) }}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col">
-                <div class="surface-card stats-card">
-                    <div class="stats-card__row">
-                        <div class="stats-card__icon is-purple"><i class="bi bi-gem"></i></div>
-                        <div class="flex-grow-1">
-                            <p class="stats-card__eyebrow">{{ __('system.subscription_status') }}</p>
-                            <h3 class="stats-card__value">{{ $user->subscription_status }}</h3>
-                            <p class="stats-card__subtext">{{ __('system.expired_on', ['date' => $user->expired_subscription_status]) }}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col">
-                <div class="surface-card stats-card">
-                    <div class="stats-card__row">
-                        <div class="stats-card__icon is-blue"><i class="bi bi-chat-dots"></i></div>
-                        <div class="flex-grow-1">
-                            <p class="stats-card__eyebrow">{{ __('system.all_messages_sent') }}</p>
-                            <h3 class="stats-card__value">{{ $user->message_histories_count }}</h3>
-                            <p class="stats-card__subtext">{{ __('system.from_message_histories') }}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="row g-4 row-cols-1 row-cols-md-2 row-cols-xl-4">
-            @foreach ($operational['health'] as $healthCard)
-                <div class="col">
-                    <div class="surface-card stats-card h-100">
-                        <div class="d-flex justify-content-between align-items-start gap-3">
-                            <div>
-                                <p class="stats-card__eyebrow">{{ $healthCard['label'] }}</p>
-                                <h3 class="stats-card__value text-capitalize">{{ $healthCard['status'] }}</h3>
-                                <p class="stats-card__subtext mb-0">{{ $healthCard['message'] }}</p>
-                            </div>
-                            <span class="badge {{ $healthCard['badge_class'] }}">{{ ucfirst($healthCard['status']) }}</span>
-                        </div>
-                    </div>
-                </div>
-            @endforeach
-        </section>
-
-        <section class="surface-card">
-            <div class="account-shell__header">
-                <div>
-                    <p class="section-kicker">Setup Center</p>
-                    <h3 class="section-title">Checklist onboarding cepat</h3>
-                    <div class="section-line"></div>
-                </div>
-                <div class="d-flex gap-2 flex-wrap">
-                    <a href="{{ route('admin.settings') }}" class="btn btn-outline-primary chatsmart-btn">
-                        <i class="bi bi-sliders"></i> Server Settings
-                    </a>
-                    <a href="{{ route('rest-api') }}" class="btn btn-outline-secondary chatsmart-btn">
-                        <i class="bi bi-file-earmark-code"></i> API Docs
-                    </a>
-                </div>
-            </div>
-            <div class="row g-3">
-                @foreach ($operational['setup'] as $setupItem)
-                    <div class="col-md-6 col-xl-4">
-                        <div class="border rounded-3 p-3 h-100">
-                            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-                                <div>
-                                    <div class="fw-semibold">{{ $setupItem['label'] }}</div>
-                                    <div class="small text-muted">{{ $setupItem['message'] }}</div>
-                                </div>
-                                <span class="badge bg-{{ $setupItem['status'] === 'done' ? 'success' : ($setupItem['status'] === 'info' ? 'info' : 'warning') }}">
-                                    {{ $setupItem['status'] === 'done' ? 'Done' : 'Need setup' }}
-                                </span>
-                            </div>
-                            <div class="small text-muted">{{ $setupItem['action'] }}</div>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </section>
-
-        <section class="surface-card">
-            <div class="account-shell__header">
-                <div>
-                    <p class="section-kicker">Operational Snapshot</p>
-                    <h3 class="section-title">Ringkasan operasional hari ini</h3>
-                    <div class="section-line"></div>
-                </div>
-                @if (auth()->user()->level === 'admin')
-                    <a href="{{ route('admin.operational-audit') }}" class="btn btn-outline-primary chatsmart-btn">
-                        <i class="bi bi-clipboard-data"></i> Audit Operasional
+            <div class="cs-dashboard-actions">
+                @if ($hasSelectedDevice)
+                    <a href="{{ route('messagetest') }}" class="btn btn-primary cs-btn">
+                        <i class="bi bi-send"></i> Kirim pesan
                     </a>
                 @endif
-            </div>
-            <div class="row g-3">
-                <div class="col-md-4 col-xl-2">
-                    <div class="border rounded-3 p-3 h-100">
-                        <div class="small text-muted">Chat aktif hari ini</div>
-                        <div class="fs-4 fw-semibold">{{ $operational['metrics']['incoming_active_chats_today'] }}</div>
-                    </div>
-                </div>
-                <div class="col-md-4 col-xl-2">
-                    <div class="border rounded-3 p-3 h-100">
-                        <div class="small text-muted">Pesan incoming tercatat</div>
-                        <div class="fs-4 fw-semibold">{{ $operational['metrics']['incoming_messages_tracked_today'] }}</div>
-                    </div>
-                </div>
-                <div class="col-md-4 col-xl-2">
-                    <div class="border rounded-3 p-3 h-100">
-                        <div class="small text-muted">Auto reply sukses</div>
-                        <div class="fs-4 fw-semibold text-success">{{ $operational['metrics']['auto_reply_success_today'] }}</div>
-                    </div>
-                </div>
-                <div class="col-md-4 col-xl-2">
-                    <div class="border rounded-3 p-3 h-100">
-                        <div class="small text-muted">Auto reply gagal</div>
-                        <div class="fs-4 fw-semibold text-danger">{{ $operational['metrics']['auto_reply_failed_today'] }}</div>
-                    </div>
-                </div>
-                <div class="col-md-4 col-xl-2">
-                    <div class="border rounded-3 p-3 h-100">
-                        <div class="small text-muted">AI fallback / event</div>
-                        <div class="fs-4 fw-semibold text-warning">{{ $operational['metrics']['ai_fallback_today'] }}</div>
-                    </div>
-                </div>
-                <div class="col-md-4 col-xl-2">
-                    <div class="border rounded-3 p-3 h-100">
-                        <div class="small text-muted">Chat dipause</div>
-                        <div class="fs-4 fw-semibold">{{ $operational['metrics']['paused_conversations'] }}</div>
-                    </div>
-                </div>
+                <button type="button" class="btn btn-outline-secondary cs-btn" data-bs-toggle="modal"
+                    data-bs-target="#addDevice">
+                    <i class="bi bi-plus-lg"></i> Tambah perangkat
+                </button>
             </div>
         </section>
 
-        <section class="surface-card account-shell">
-            <div class="account-shell__header">
+        <section class="cs-metric-grid" aria-label="Ringkasan aktivitas">
+            <article class="cs-metric-card">
+                <span class="cs-metric-icon is-green"><i class="bi bi-whatsapp"></i></span>
                 <div>
-                    <p class="section-kicker">Connection Center</p>
-                    <h3 class="section-title">{{ __('system.whatsapp_account') }}</h3>
-                    <div class="section-line"></div>
+                    <span class="cs-metric-label">Perangkat aktif</span>
+                    <strong>{{ $connectedDevices }}<small>/{{ $user->devices_count }}</small></strong>
+                    <span class="cs-metric-note">{{ $connectedDevices > 0 ? 'Siap menerima pesan' : 'Perlu dihubungkan' }}</span>
                 </div>
+            </article>
 
-                <button type="button" class="btn btn-primary chatsmart-btn" data-bs-toggle="modal"
-                    data-bs-target="#addDevice">
-                    <i class="bi bi-plus-lg"></i> {{ __('system.add_device') }}
-                </button>
-            </div>
+            <article class="cs-metric-card">
+                <span class="cs-metric-icon is-blue"><i class="bi bi-chat-square-text"></i></span>
+                <div>
+                    <span class="cs-metric-label">Pesan hari ini</span>
+                    <strong>{{ number_format($user->messages_today_count) }}</strong>
+                    <span class="cs-metric-note">{{ number_format($user->messages_success_today_count) }} berhasil terkirim</span>
+                </div>
+            </article>
 
-            <div class="table-responsive device-table">
-                <table class="table align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>No</th>
-                            <th>{{ __('system.number') }}</th>
-                            <th class="text-nowrap">Webhook URL</th>
-                            <th>{{ __('system.read') }}</th>
-                            <th class="text-nowrap">{{ __('system.reject_call') }}</th>
-                            <th>{{ __('system.online') }}</th>
-                            <th>{{ __('system.typing_wh') }}</th>
-                            <th>{{ __('system.sent') }}</th>
-                            <th>{{ __('system.status') }}</th>
-                            <th class="text-end">{{ __('system.action') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if ($numbers->total() == 0)
-                            <x-no-data colspan="10" :text="__('system.no_device_added_yet')" />
+            <article class="cs-metric-card">
+                <span class="cs-metric-icon is-amber"><i class="bi bi-graph-up-arrow"></i></span>
+                <div>
+                    <span class="cs-metric-label">Keberhasilan kirim</span>
+                    <strong>{{ $dashboard['delivery_rate'] }}<small>%</small></strong>
+                    <span class="cs-metric-note">{{ number_format($user->messages_failed_today_count) }} pesan perlu dicek</span>
+                </div>
+            </article>
+
+            <article class="cs-metric-card">
+                <span class="cs-metric-icon is-slate"><i class="bi bi-stars"></i></span>
+                <div>
+                    <span class="cs-metric-label">Percakapan AI</span>
+                    <strong>{{ number_format($dashboard['active_ai_conversations']) }}</strong>
+                    <span class="cs-metric-note">{{ number_format($user->paused_ai_conversations_count) }} sedang dipause</span>
+                </div>
+            </article>
+        </section>
+
+        <div class="cs-dashboard-grid">
+            <div class="cs-dashboard-main">
+                <section class="cs-panel cs-quick-panel">
+                    <div class="cs-panel-heading">
+                        <div>
+                            <span class="cs-eyebrow">Akses cepat</span>
+                            <h2>Pekerjaan utama</h2>
+                        </div>
+                        @if ($hasSelectedDevice)
+                            <span class="cs-device-chip is-connected"><span></span>{{ $selectedDevice->body }}</span>
+                        @else
+                            <span class="cs-device-chip"><span></span>Pilih perangkat</span>
                         @endif
+                    </div>
 
-                        @foreach ($numbers as $number)
+                    <div class="cs-quick-grid">
+                        <a href="{{ $hasSelectedDevice ? route('autoreply') : '#device_idd' }}" class="cs-quick-action">
+                            <span><i class="bi bi-reply"></i></span>
+                            <div><strong>Auto Reply</strong><small>Atur balasan otomatis</small></div>
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                        <a href="{{ $hasSelectedDevice ? route('campaign.create') : '#device_idd' }}" class="cs-quick-action">
+                            <span><i class="bi bi-megaphone"></i></span>
+                            <div><strong>Buat Campaign</strong><small>Kirim pesan terjadwal</small></div>
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                        <a href="{{ route('ai-conversations.index') }}" class="cs-quick-action">
+                            <span><i class="bi bi-stars"></i></span>
+                            <div><strong>Histori AI</strong><small>Pantau dan bersihkan chat</small></div>
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                        <a href="{{ route('messages.history') }}" class="cs-quick-action">
+                            <span><i class="bi bi-clock-history"></i></span>
+                            <div><strong>Riwayat Pesan</strong><small>Cek status pengiriman</small></div>
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </div>
+                </section>
+
+                <section class="cs-panel cs-device-panel">
+                    <div class="cs-panel-heading">
+                        <div>
+                            <span class="cs-eyebrow">WhatsApp</span>
+                            <h2>Perangkat Anda</h2>
+                            <p>Hubungkan, pantau, dan buka pengaturan lanjutan bila diperlukan.</p>
+                        </div>
+                        <span class="cs-count-badge">{{ $numbers->total() }} perangkat</span>
+                    </div>
+
+                    <div class="cs-device-list">
+                        @forelse ($numbers as $number)
                             @php
-                                $webhookRead = $number['webhook_read'] ?? false;
-                                $webhookRejectCall = $number['webhook_reject_call'] ?? false;
-                                $setAvailable = $number['set_available'] ?? false;
-                                $webhookTyping = $number['webhook_typing'] ?? false;
-                                $isConnected = $number['status'] === 'Connected';
+                                $webhookRead = (bool) ($number->webhook_read ?? false);
+                                $webhookRejectCall = (bool) ($number->webhook_reject_call ?? false);
+                                $setAvailable = (bool) ($number->set_available ?? false);
+                                $webhookTyping = (bool) ($number->webhook_typing ?? false);
+                                $isConnected = $number->status === 'Connected';
                             @endphp
-                            <tr>
-                                <td><span class="device-index">{{ $loop->iteration }}</span></td>
-                                <td>
-                                    <div class="device-profile">
-                                        <span class="device-avatar">
-                                            <img src="{{ asset('assets/images/avatars/avatar-1.png') }}"
-                                                alt="Avatar perangkat {{ $number['body'] }}"
-                                                class="device-avatar__image">
-                                            <span class="device-avatar__badge">
-                                                <i class="bi bi-whatsapp"></i>
-                                            </span>
-                                        </span>
-                                        <div class="device-meta">
-                                            <strong>{{ $number['body'] }}</strong>
-                                            <span>ChatSmart Device</span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <form action="" method="post">
-                                        @csrf
-                                        <input type="text" class="form-control table-input webhook-url-form"
-                                            data-id="{{ $number['body'] }}" value="{{ $number['webhook'] }}">
-                                    </form>
-                                </td>
-                                <td>
-                                    <div class="form-check form-switch m-0">
-                                        <input data-url="{{ route('setHookRead') }}" class="form-check-input toggle-read"
-                                            type="checkbox" data-id="{{ $number['body'] }}"
-                                            {{ $webhookRead ? 'checked' : '' }} />
-                                        <label class="form-check-label">{{ $webhookRead ? __('system.yes') : __('system.no') }}</label>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="form-check form-switch m-0">
-                                        <input data-url="{{ route('setHookReject') }}"
-                                            class="form-check-input toggle-reject" type="checkbox"
-                                            data-id="{{ $number['body'] }}"
-                                            {{ $webhookRejectCall ? 'checked' : '' }} />
-                                        <label class="form-check-label">{{ $webhookRejectCall ? __('system.yes') : __('system.no') }}</label>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="form-check form-switch m-0">
-                                        <input data-url="{{ route('setAvailable') }}"
-                                            class="form-check-input toggle-available" type="checkbox"
-                                            data-id="{{ $number['body'] }}" {{ $setAvailable ? 'checked' : '' }} />
-                                        <label class="form-check-label">{{ $setAvailable ? __('system.yes') : __('system.no') }}</label>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="form-check form-switch m-0">
-                                        <input data-url="{{ route('setHookTyping') }}" class="form-check-input toggle-typing"
-                                            type="checkbox" data-id="{{ $number['body'] }}"
-                                            {{ $webhookTyping ? 'checked' : '' }} />
-                                        <label class="form-check-label">{{ $webhookTyping ? __('system.yes') : __('system.no') }}</label>
-                                    </div>
-                                </td>
-                                <td>{{ $number['message_sent'] }}</td>
-                                <td>
-                                    <span class="status-pill {{ $isConnected ? 'is-connected' : 'is-disconnected' }}">
-                                        {{ $number['status'] }}
+
+                            <article class="cs-device-item">
+                                <div class="cs-device-summary">
+                                    <span class="cs-device-avatar {{ $isConnected ? 'is-connected' : '' }}">
+                                        <i class="bi bi-phone"></i>
                                     </span>
-                                </td>
-                                <td class="text-end">
-                                    <div class="action-group justify-content-end">
-                                        <a href="{{ route('connect-via-code', $number->body) }}"
-                                            class="action-btn is-primary" data-bs-toggle="tooltip"
-                                            title="{{ __('system.connect_via_code') }}">
-                                            <i class="bi bi-phone"></i>
-                                        </a>
-                                        <a href="{{ route('scan', $number->body) }}" class="action-btn is-dark"
-                                            data-bs-toggle="tooltip" title="{{ __('system.connect_via_qr') }}">
+                                    <div class="cs-device-copy">
+                                        <div class="cs-device-title-row">
+                                            <strong>{{ $number->body }}</strong>
+                                            <span class="cs-status-pill {{ $isConnected ? 'is-connected' : 'is-offline' }}">
+                                                <span></span>{{ $isConnected ? 'Terhubung' : 'Terputus' }}
+                                            </span>
+                                        </div>
+                                        <span>{{ number_format((int) $number->message_sent) }} pesan terkirim</span>
+                                    </div>
+
+                                    <div class="cs-device-actions">
+                                        <a href="{{ route('scan', $number->body) }}" class="btn btn-sm btn-primary cs-icon-btn"
+                                            title="Hubungkan dengan QR" aria-label="Hubungkan {{ $number->body }} dengan QR">
                                             <i class="bi bi-qr-code"></i>
                                         </a>
-                                        <form action="{{ route('deleteDevice') }}" method="POST">
+                                        <a href="{{ route('connect-via-code', $number->body) }}"
+                                            class="btn btn-sm btn-outline-secondary cs-icon-btn" title="Hubungkan dengan kode"
+                                            aria-label="Hubungkan {{ $number->body }} dengan kode">
+                                            <i class="bi bi-phone"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary cs-icon-btn"
+                                            data-bs-toggle="collapse" data-bs-target="#deviceSettings{{ $number->id }}"
+                                            aria-expanded="false" aria-controls="deviceSettings{{ $number->id }}"
+                                            title="Pengaturan lanjutan" aria-label="Pengaturan {{ $number->body }}">
+                                            <i class="bi bi-sliders"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="collapse" id="deviceSettings{{ $number->id }}">
+                                    <div class="cs-device-settings">
+                                        <div class="cs-setting-field">
+                                            <label for="webhook-{{ $number->id }}">Webhook URL</label>
+                                            <input id="webhook-{{ $number->id }}" type="url"
+                                                class="form-control webhook-url-form" data-id="{{ $number->body }}"
+                                                value="{{ $number->webhook }}" placeholder="https://domain.com/webhook">
+                                        </div>
+
+                                        <div class="cs-toggle-grid">
+                                            <label class="cs-toggle-option">
+                                                <span><strong>Status dibaca</strong><small>Kirim event pesan dibaca</small></span>
+                                                <input data-url="{{ route('setHookRead') }}" class="form-check-input toggle-read"
+                                                    type="checkbox" data-id="{{ $number->body }}" {{ $webhookRead ? 'checked' : '' }}>
+                                            </label>
+                                            <label class="cs-toggle-option">
+                                                <span><strong>Tolak panggilan</strong><small>Tolak panggilan WhatsApp</small></span>
+                                                <input data-url="{{ route('setHookReject') }}" class="form-check-input toggle-reject"
+                                                    type="checkbox" data-id="{{ $number->body }}" {{ $webhookRejectCall ? 'checked' : '' }}>
+                                            </label>
+                                            <label class="cs-toggle-option">
+                                                <span><strong>Status online</strong><small>Tampilkan akun selalu aktif</small></span>
+                                                <input data-url="{{ route('setAvailable') }}" class="form-check-input toggle-available"
+                                                    type="checkbox" data-id="{{ $number->body }}" {{ $setAvailable ? 'checked' : '' }}>
+                                            </label>
+                                            <label class="cs-toggle-option">
+                                                <span><strong>Event mengetik</strong><small>Kirim event typing ke webhook</small></span>
+                                                <input data-url="{{ route('setHookTyping') }}" class="form-check-input toggle-typing"
+                                                    type="checkbox" data-id="{{ $number->body }}" {{ $webhookTyping ? 'checked' : '' }}>
+                                            </label>
+                                        </div>
+
+                                        <form action="{{ route('deleteDevice') }}" method="POST" class="cs-danger-action"
+                                            onsubmit="return confirm('Hapus perangkat {{ $number->body }} beserta kredensial koneksinya?')">
                                             @method('delete')
                                             @csrf
-                                            <input name="deviceId" type="hidden" value="{{ $number['id'] }}">
-                                            <button type="submit" name="delete" class="action-btn is-danger">
-                                                <i class="bi bi-trash"></i>
+                                            <input name="deviceId" type="hidden" value="{{ $number->id }}">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                <i class="bi bi-trash"></i> Hapus perangkat
                                             </button>
                                         </form>
                                     </div>
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                                </div>
+                            </article>
+                        @empty
+                            <div class="cs-empty-state">
+                                <span><i class="bi bi-phone"></i></span>
+                                <strong>Belum ada perangkat</strong>
+                                <p>Tambahkan nomor WhatsApp pertama untuk mulai menggunakan ChatSmart.</p>
+                                <button type="button" class="btn btn-primary cs-btn" data-bs-toggle="modal"
+                                    data-bs-target="#addDevice">Tambah perangkat</button>
+                            </div>
+                        @endforelse
+                    </div>
+
+                    @if ($numbers->hasPages())
+                        <div class="cs-pagination">{{ $numbers->links() }}</div>
+                    @endif
+                </section>
             </div>
 
-            <nav aria-label="Page navigation example">
-                <ul class="pagination">
-                    <li class="page-item {{ $numbers->currentPage() == 1 ? 'disabled' : '' }}">
-                        <a class="page-link" href="{{ $numbers->previousPageUrl() }}"><i class="bi bi-chevron-left"></i></a>
-                    </li>
+            <div class="cs-dashboard-side">
+                <section class="cs-panel cs-focus-card">
+                    <span class="cs-eyebrow">Status hari ini</span>
+                    <h2>{{ $connectedDevices > 0 ? 'Siap melayani pelanggan' : 'Hubungkan WhatsApp' }}</h2>
+                    <p>{{ $connectedDevices > 0
+                        ? 'Perangkat aktif dan fitur pesan dapat digunakan dari dashboard.'
+                        : 'Belum ada perangkat yang terhubung. Scan QR untuk mulai menerima pesan.' }}</p>
+                    @if ($connectedDevices > 0)
+                        <div class="cs-status-line is-good"><i class="bi bi-check2-circle"></i> Koneksi tersedia</div>
+                    @else
+                        <div class="cs-status-line is-warning"><i class="bi bi-exclamation-circle"></i> Perlu tindakan</div>
+                    @endif
+                </section>
 
-                    @for ($i = 1; $i <= $numbers->lastPage(); $i++)
-                        <li class="page-item {{ $numbers->currentPage() == $i ? 'active' : '' }}">
-                            <a class="page-link" href="{{ $numbers->url($i) }}">{{ $i }}</a>
-                        </li>
-                    @endfor
+                <section class="cs-panel cs-account-card">
+                    <div class="cs-panel-heading compact">
+                        <div>
+                            <span class="cs-eyebrow">Akun</span>
+                            <h2>Paket & kapasitas</h2>
+                        </div>
+                        <span class="cs-plan-pill {{ $user->subscription_status === 'Expired' ? 'is-expired' : '' }}">
+                            {{ $user->subscription_status }}
+                        </span>
+                    </div>
+                    <div class="cs-capacity-row">
+                        <span>Perangkat</span>
+                        <strong>{{ $user->devices_count }} dari {{ $user->limit_device }}</strong>
+                    </div>
+                    <div class="cs-progress"><span style="width: {{ $deviceUsage }}%"></span></div>
+                    <div class="cs-account-meta">
+                        <span>Aktif sampai</span>
+                        <strong>{{ $user->expired_subscription_status }}</strong>
+                    </div>
+                </section>
 
-                    <li class="page-item {{ $numbers->currentPage() == $numbers->lastPage() ? 'disabled' : '' }}">
-                        <a class="page-link" href="{{ $numbers->nextPageUrl() }}"><i class="bi bi-chevron-right"></i></a>
-                    </li>
-                </ul>
-            </nav>
-        </section>
-
-    </div>
-
-    <div class="modal fade" id="addDevice" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="exampleModalLabel">{{ __('system.add_device') }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"
-                        aria-label="{{ __('system.close') }}"></button>
-                </div>
-                <div class="modal-body">
-                    <form action="{{ route('addDevice') }}" method="POST">
-                        @csrf
-                        <label for="sender" class="form-label">{{ __('system.number') }}</label>
-                        <input type="number" name="sender" class="form-control" id="nomor" required>
-                        <p class="text-small text-danger mt-2">{{ __('system.use_country_code') }}</p>
-                        <label for="urlwebhook" class="form-label mt-2">{{ __('system.link_webhook') }}</label>
-                        <input type="text" name="urlwebhook" class="form-control" id="urlwebhook">
-                        <p class="text-small text-danger mt-2">{{ __('system.optional') }}</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary"
-                        data-bs-dismiss="modal">{{ __('system.cancel') }}</button>
-                    <button type="submit" name="submit" class="btn btn-primary">{{ __('system.save') }}</button>
-                    </form>
-                </div>
+                @if ($user->blasts_pending > 0 || $user->messages_failed_today_count > 0 || $user->paused_ai_conversations_count > 0)
+                    <section class="cs-panel cs-attention-card">
+                        <div class="cs-panel-heading compact">
+                            <div>
+                                <span class="cs-eyebrow">Perlu perhatian</span>
+                                <h2>Tugas tertunda</h2>
+                            </div>
+                        </div>
+                        <a href="{{ route('campaigns') }}"><span>Campaign menunggu</span><strong>{{ $user->blasts_pending }}</strong></a>
+                        <a href="{{ route('messages.history') }}"><span>Pesan gagal hari ini</span><strong>{{ $user->messages_failed_today_count }}</strong></a>
+                        <a href="{{ route('ai-conversations.index', ['status' => 'paused']) }}"><span>AI dipause</span><strong>{{ $user->paused_ai_conversations_count }}</strong></a>
+                    </section>
+                @endif
             </div>
         </div>
     </div>
 
+    <div class="modal fade" id="addDevice" tabindex="-1" aria-labelledby="addDeviceLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content cs-modal">
+                <form action="{{ route('addDevice') }}" method="POST">
+                    @csrf
+                    <div class="modal-header">
+                        <div>
+                            <span class="cs-eyebrow">WhatsApp baru</span>
+                            <h5 class="modal-title" id="addDeviceLabel">Tambah perangkat</h5>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="nomor" class="form-label">Nomor WhatsApp</label>
+                            <input type="text" inputmode="numeric" name="sender" class="form-control" id="nomor"
+                                placeholder="628123456789" pattern="[0-9]{8,15}" required>
+                            <div class="form-text">Gunakan kode negara tanpa tanda plus, contoh 62812...</div>
+                        </div>
+                        <div>
+                            <label for="urlwebhook" class="form-label">Webhook URL <span class="text-muted">(opsional)</span></label>
+                            <input type="url" name="urlwebhook" class="form-control" id="urlwebhook"
+                                placeholder="https://domain.com/webhook">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary">Simpan perangkat</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </x-layout-dashboard>
+
 <script>
-    var typingTimer;
-    var doneTypingInterval = 1000;
-    const i18n = {
-        webhookUpdated: @json(__('system.webhook_updated')),
-        failedToUpdate: @json(__('system.failed_to_update')),
-        yes: @json(__('system.yes')),
-        no: @json(__('system.no')),
-    };
+    (function() {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        const webhookTimers = new WeakMap();
 
-    $('.webhook-url-form').on('keyup', function() {
-        clearTimeout(typingTimer);
-        let value = $(this).val();
-        let number = $(this).data('id');
-
-        typingTimer = setTimeout(function() {
-            $.ajax({
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-                },
-                url: '{{ route('setHook') }}',
-                data: {
-                    csrf: $('meta[name="csrf-token"]').attr('content'),
-                    number: number,
-                    webhook: value
-                },
-                dataType: 'json',
-                success: () => {
-                    toastr.success(i18n.webhookUpdated);
-                },
-                error: (err) => {
-                    console.log(err);
-                }
-            })
-        }, doneTypingInterval);
-    });
-
-    const bindToggleAction = (selector, fieldName) => {
-        $(selector).on("click", function() {
-            let dataId = $(this).data("id");
-            let isChecked = $(this).is(":checked");
-            let url = $(this).data("url");
-            $.ajax({
-                url: url,
-                type: "POST",
-                headers: {
-                    "X-CSRF-TOKEN": $('meta[name="csrf-token"]').attr("content"),
-                },
-                data: {
-                    [fieldName]: isChecked ? "1" : "0",
-                    id: dataId,
-                },
-                success: function(result) {
-                    let label = $(`${selector}[data-id="${dataId}"]`).parent().find("label");
-                    if (result.error) {
-                        toastr['error'](result.msg || i18n.failedToUpdate);
-                        $(`${selector}[data-id="${dataId}"]`).prop("checked", !isChecked);
-                        return;
-                    }
-
-                    label.text(isChecked ? i18n.yes : i18n.no);
-                    toastr['success'](result.msg);
-                },
-                error: function() {
-                    toastr['error'](i18n.failedToUpdate);
-                    $(`${selector}[data-id="${dataId}"]`).prop("checked", !isChecked);
-                }
+        document.querySelectorAll('.webhook-url-form').forEach(function(input) {
+            input.addEventListener('input', function() {
+                window.clearTimeout(webhookTimers.get(input));
+                webhookTimers.set(input, window.setTimeout(function() {
+                    $.ajax({
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrfToken },
+                        url: @json(route('setHook')),
+                        data: { number: input.dataset.id, webhook: input.value },
+                        success: function() { toastr.success('Webhook berhasil diperbarui.'); },
+                        error: function(response) {
+                            const message = response.responseJSON && response.responseJSON.message;
+                            toastr.error(message || 'Webhook gagal diperbarui.');
+                        }
+                    });
+                }, 700));
             });
         });
-    };
 
-    bindToggleAction(".toggle-read", "webhook_read");
-    bindToggleAction(".toggle-reject", "webhook_reject_call");
-    bindToggleAction(".toggle-available", "set_available");
-    bindToggleAction(".toggle-typing", "webhook_typing");
+        function bindToggle(selector, fieldName) {
+            document.querySelectorAll(selector).forEach(function(toggle) {
+                toggle.addEventListener('change', function() {
+                    const checked = toggle.checked;
+                    $.ajax({
+                        url: toggle.dataset.url,
+                        type: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrfToken },
+                        data: { id: toggle.dataset.id, [fieldName]: checked ? '1' : '0' },
+                        success: function(result) {
+                            if (result.error) {
+                                toggle.checked = !checked;
+                                toastr.error(result.msg || 'Pengaturan gagal diperbarui.');
+                                return;
+                            }
+                            toastr.success('Pengaturan berhasil diperbarui.');
+                        },
+                        error: function() {
+                            toggle.checked = !checked;
+                            toastr.error('Pengaturan gagal diperbarui.');
+                        }
+                    });
+                });
+            });
+        }
+
+        bindToggle('.toggle-read', 'webhook_read');
+        bindToggle('.toggle-reject', 'webhook_reject_call');
+        bindToggle('.toggle-available', 'set_available');
+        bindToggle('.toggle-typing', 'webhook_typing');
+    })();
 </script>

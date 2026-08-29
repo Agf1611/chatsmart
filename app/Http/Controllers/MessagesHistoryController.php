@@ -203,14 +203,22 @@ class MessagesHistoryController extends Controller
             if ($isSent) {
                 $history->update([
                     'status' => 'success',
+                    'whatsapp_message_id' => data_get($res, 'data.key.id'),
+                    'resolved_jid' => data_get($res, 'data.key.remoteJid'),
+                    'delivery_status' => 'pending',
+                    'sent_at' => now(),
+                    'delivered_at' => null,
+                    'read_at' => null,
                     'note' => 'Resent successfully on ' . now()->format('d M Y H:i'),
                 ]);
+                MessageHistory::syncRecentDeliveryReceipts();
 
                 return ['success' => true, 'message' => 'Resend message success'];
             }
 
             $history->update([
                 'status' => 'failed',
+                'delivery_status' => 'failed',
                 'note' => $res->message ?? 'Failed to resend this message.',
             ]);
 

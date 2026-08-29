@@ -23,9 +23,7 @@
         })();
     </script>
 
-    <link href="{{ asset('assets/plugins/vectormap/jquery-jvectormap-2.0.2.css') }}" rel="stylesheet" />
     <link href="{{ asset('assets/plugins/simplebar/css/simplebar.css') }}" rel="stylesheet" />
-    <link href="{{ asset('assets/plugins/perfect-scrollbar/css/perfect-scrollbar.css') }}" rel="stylesheet" />
     <link href="{{ asset('assets/plugins/metismenu/css/metisMenu.min.css') }}" rel="stylesheet" />
     <link href="{{ asset('assets/css/bootstrap.min.css') }}" rel="stylesheet" />
     <link href="{{ asset('assets/css/bootstrap-extended.css') }}" rel="stylesheet" />
@@ -37,10 +35,16 @@
     <link href="{{ asset('assets/css/header-colors.css') }}" rel="stylesheet" />
     <link href="{{ asset('assets/css/pace.min.css') }}" rel="stylesheet" />
     <link href="{{ asset('assets/css/chatsmart-theme.css') }}?v={{ $chatsmartThemeVersion }}" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.9.1/font/bootstrap-icons.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/css/toastr.min.css" />
+    @if (request()->routeIs('campaign.create'))
+        <link href="{{ asset('assets/plugins/smart-wizard/css/smart_wizard_all.min.css') }}" rel="stylesheet"
+            type="text/css" />
+    @endif
     <script src="{{ asset('assets/js/jquery.min.js') }}"></script>
 
     <meta name="csrf-token" content="{{ csrf_token() }}" />
@@ -64,10 +68,10 @@
     <script src="{{ asset('assets/js/app.js') }}"></script>
     <script src="{{ asset('assets/js/index.js') }}?v={{ $dashboardIndexVersion }}"></script>
     <script src="{{ asset('assets/js/chatsmart-theme.js') }}?v={{ $dashboardThemeJsVersion }}"></script>
-    <script src="{{ asset('assets/plugins/smart-wizard/js/jquery.smartWizard.min.js') }}"></script>
+    @if (request()->routeIs('campaign.create'))
+        <script src="{{ asset('assets/plugins/smart-wizard/js/jquery.smartWizard.min.js') }}"></script>
+    @endif
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/js/toastr.min.js"></script>
-    <link href="{{ asset('assets/plugins/smart-wizard/css/smart_wizard_all.min.css') }}" rel="stylesheet"
-        type="text/css" />
 
     <script>
         toastr.options = {

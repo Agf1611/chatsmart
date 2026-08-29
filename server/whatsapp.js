@@ -24,7 +24,12 @@ const MAIN_LOGGER = require("./lib/pino");
 
 const logger = MAIN_LOGGER.child({});
 const msgRetryCounterCache = new NodeCache();
-const recipientJidCache = new NodeCache({ stdTTL: 24 * 60 * 60, useClones: false });
+const recipientJidCache = new NodeCache({ stdTTL: 6 * 60 * 60, useClones: false });
+const outboundMessageCache = new NodeCache({
+  stdTTL: 24 * 60 * 60,
+  checkperiod: 10 * 60,
+  useClones: false,
+});
 const sessions = {};
 const qrcode = {};
 const pairingCode = {};
@@ -41,6 +46,57 @@ const DEFAULT_WA_VERSION = Array.isArray(DEFAULT_CONNECTION_CONFIG?.version)
 
 function isNewsletterJid(jid) {
   return String(jid || "").toLowerCase().endsWith("@newsletter");
+}
+
+function outboundMessageCacheKey(token, messageId) {
+  const normalizedId = String(messageId || "").trim();
+  return normalizedId ? `${String(token)}:${normalizedId}` : "";
+}
+
+function rememberOutboundMessage(token, messageInfo) {
+  const cacheKey = outboundMessageCacheKey(token, messageInfo?.key?.id);
+  if (!cacheKey || !messageInfo?.message) {
+    return;
+  }
+
+  outboundMessageCache.set(cacheKey, messageInfo.message);
+}
+
+async function getCachedOutboundMessage(token, key) {
+  const cacheKey = outboundMessageCacheKey(token, key?.id);
+  const message = cacheKey ? outboundMessageCache.get(cacheKey) : undefined;
+
+  console.log("[message-retry] lookup", {
+    token,
+    messageId: key?.id || null,
+    remoteJid: key?.remoteJid || null,
+    found: Boolean(message),
+  });
+
+  return message;
+}
+
+function enableOutboundMessageRetryCache(token, socket) {
+  const sendMessage = socket.sendMessage.bind(socket);
+  socket.sendMessage = async (...args) => {
+    const response = await sendMessage(...args);
+    rememberOutboundMessage(token, response);
+    return response;
+  };
+
+  const relayMessage = socket.relayMessage.bind(socket);
+  socket.relayMessage = async (jid, message, options = {}) => {
+    const response = await relayMessage(jid, message, options);
+    rememberOutboundMessage(token, {
+      key: {
+        id: options.messageId,
+        remoteJid: jid,
+        fromMe: true,
+      },
+      message,
+    });
+    return response;
+  };
 }
 
 function patchBaileysNewsletterDecode() {
@@ -133,6 +189,26 @@ function createRecipientCacheKey(token, number) {
   return `${token}:${normalizedNumber}`;
 }
 
+function isLidJid(jid) {
+  return String(jid || "").toLowerCase().endsWith("@lid");
+}
+
+function isPhoneNumberJid(jid) {
+  return String(jid || "").toLowerCase().endsWith("@s.whatsapp.net");
+}
+
+function orderRecipientJids(jids) {
+  const uniqueJids = Array.from(
+    new Set(
+      (Array.isArray(jids) ? jids : [jids])
+        .map((jid) => jidNormalizedUser(String(jid || "").trim()))
+        .filter(Boolean)
+    )
+  );
+
+  return uniqueJids.sort((left, right) => Number(isLidJid(right)) - Number(isLidJid(left)));
+}
+
 function getCachedRecipientJids(token, number) {
   const cacheKey = createRecipientCacheKey(token, number);
   if (!cacheKey) {
@@ -149,21 +225,40 @@ function rememberRecipientJids(token, number, jids) {
     return;
   }
 
-  const normalizedJids = (Array.isArray(jids) ? jids : [jids])
-    .map((jid) => jidNormalizedUser(String(jid || "").trim()))
-    .filter(Boolean);
+  const normalizedJids = orderRecipientJids(jids);
 
   if (normalizedJids.length === 0) {
     return;
   }
 
-  recipientJidCache.set(cacheKey, Array.from(new Set(normalizedJids)));
+  recipientJidCache.set(cacheKey, orderRecipientJids([...getCachedRecipientJids(token, number), ...normalizedJids]));
 }
 
 async function loadStoredRecipientJids(token, number) {
   const normalizedNumber = normalizeLookupNumber(number);
   if (!token || !normalizedNumber) {
     return [];
+  }
+
+  const storedJids = [];
+
+  try {
+    const mappings = await dbQuery(
+      `SELECT whatsapp_recipient_mappings.lid_jid, whatsapp_recipient_mappings.pn_jid
+       FROM whatsapp_recipient_mappings
+       INNER JOIN devices ON devices.id = whatsapp_recipient_mappings.device_id
+       WHERE devices.body = ?
+         AND whatsapp_recipient_mappings.phone_number = ?
+       ORDER BY whatsapp_recipient_mappings.last_seen_at DESC
+       LIMIT 1`,
+      [String(token), normalizedNumber]
+    );
+
+    for (const mapping of mappings) {
+      storedJids.push(mapping?.lid_jid, mapping?.pn_jid);
+    }
+  } catch (error) {
+    // The migration can briefly lag behind the Node process during a rolling deploy.
   }
 
   try {
@@ -178,17 +273,198 @@ async function loadStoredRecipientJids(token, number) {
       [String(token), `${normalizedNumber}%@s.whatsapp.net`]
     );
 
-    const jids = rows
+    storedJids.push(...rows
       .map((row) => jidNormalizedUser(row?.chat_jid || ""))
-      .filter(Boolean);
-
-    if (jids.length > 0) {
-      rememberRecipientJids(token, normalizedNumber, jids);
-    }
-
-    return jids;
+      .filter(Boolean));
   } catch (error) {
-    return [];
+    // Incoming history is only a legacy fallback for installations without mappings.
+  }
+
+  const jids = orderRecipientJids(storedJids);
+  if (jids.length > 0) {
+    rememberRecipientJids(token, normalizedNumber, jids);
+  }
+
+  return jids;
+}
+
+async function saveRecipientMapping(token, pnJid, lidJid, source = "runtime") {
+  const normalizedPnJid = jidNormalizedUser(String(pnJid || "").trim());
+  const normalizedLidJid = jidNormalizedUser(String(lidJid || "").trim());
+
+  if (!isPhoneNumberJid(normalizedPnJid) || !isLidJid(normalizedLidJid)) {
+    return false;
+  }
+
+  const phoneNumber = normalizeLookupNumber(normalizedPnJid);
+  if (!phoneNumber) {
+    return false;
+  }
+
+  rememberRecipientJids(token, phoneNumber, [normalizedLidJid, normalizedPnJid]);
+
+  try {
+    await dbQuery(
+      `INSERT INTO whatsapp_recipient_mappings
+         (device_id, phone_number, pn_jid, lid_jid, source, last_seen_at, created_at, updated_at)
+       SELECT devices.id, ?, ?, ?, ?, NOW(), NOW(), NOW()
+       FROM devices
+       WHERE devices.body = ?
+       ON DUPLICATE KEY UPDATE
+         pn_jid = VALUES(pn_jid),
+         lid_jid = VALUES(lid_jid),
+         source = VALUES(source),
+         last_seen_at = NOW(),
+         updated_at = NOW()`,
+      [phoneNumber, normalizedPnJid, normalizedLidJid, String(source), String(token)]
+    );
+  } catch (error) {
+    console.log(`[recipient-map] failed saving ${phoneNumber}:`, error.message || error);
+  }
+
+  return true;
+}
+
+async function captureMessageRecipientMapping(token, message) {
+  const key = message?.key || {};
+  const remoteJid = jidNormalizedUser(String(key.remoteJid || "").trim());
+  if (!remoteJid || remoteJid.endsWith("@g.us")) {
+    return;
+  }
+
+  const pnJid = [key.senderPn, key.participantPn, remoteJid].find(isPhoneNumberJid);
+  const lidJid = [key.senderLid, key.participantLid, remoteJid].find(isLidJid);
+
+  if (pnJid && lidJid) {
+    await saveRecipientMapping(token, pnJid, lidJid, "message");
+  } else if (pnJid) {
+    rememberRecipientJids(token, pnJid, pnJid);
+  }
+}
+
+async function captureContactRecipientMapping(token, contact, source = "contact") {
+  const pnJid = contact?.jid || (isPhoneNumberJid(contact?.id) ? contact.id : "");
+  const lidJid = contact?.lid || (isLidJid(contact?.id) ? contact.id : "");
+
+  if (pnJid && lidJid) {
+    await saveRecipientMapping(token, pnJid, lidJid, source);
+  }
+}
+
+function resolveDeliveryStatus(status) {
+  const statuses = proto.WebMessageInfo.Status;
+  const statusMap = new Map([
+    [Number(statuses.ERROR), { name: "failed", rank: 0 }],
+    [Number(statuses.PENDING), { name: "pending", rank: 1 }],
+    [Number(statuses.SERVER_ACK), { name: "server_ack", rank: 2 }],
+    [Number(statuses.DELIVERY_ACK), { name: "delivered", rank: 3 }],
+    [Number(statuses.READ), { name: "read", rank: 4 }],
+    [Number(statuses.PLAYED), { name: "played", rank: 5 }],
+  ]);
+
+  return statusMap.get(Number(status)) || null;
+}
+
+async function recordOutboundMessage(token, number, jid, response) {
+  const messageId = String(response?.key?.id || "").trim();
+  if (!messageId) {
+    return;
+  }
+
+  try {
+    await dbQuery(
+      `INSERT INTO whatsapp_outbound_messages
+         (device_id, whatsapp_message_id, phone_number, resolved_jid, delivery_status,
+          delivery_rank, sent_at, created_at, updated_at)
+       SELECT devices.id, ?, ?, ?, 'pending', 1, NOW(), NOW(), NOW()
+       FROM devices
+       WHERE devices.body = ?
+       ON DUPLICATE KEY UPDATE
+         phone_number = VALUES(phone_number),
+         resolved_jid = VALUES(resolved_jid),
+         updated_at = NOW()`,
+      [messageId, normalizeLookupNumber(number), String(jid), String(token)]
+    );
+  } catch (error) {
+    console.log(`[delivery] failed recording ${messageId}:`, error.message || error);
+  }
+}
+
+async function updateOutboundDelivery(token, key, status) {
+  const delivery = resolveDeliveryStatus(status);
+  const messageId = String(key?.id || "").trim();
+  if (!delivery || !messageId) {
+    return;
+  }
+
+  try {
+    const result = await dbQuery(
+      `UPDATE whatsapp_outbound_messages
+       INNER JOIN devices ON devices.id = whatsapp_outbound_messages.device_id
+       SET whatsapp_outbound_messages.delivery_status = IF(
+             whatsapp_outbound_messages.delivery_rank <= ?,
+             ?,
+             whatsapp_outbound_messages.delivery_status
+           ),
+           whatsapp_outbound_messages.delivery_rank = GREATEST(
+             whatsapp_outbound_messages.delivery_rank,
+             ?
+           ),
+           whatsapp_outbound_messages.server_ack_at = IF(
+             ? >= 2,
+             COALESCE(whatsapp_outbound_messages.server_ack_at, NOW()),
+             whatsapp_outbound_messages.server_ack_at
+           ),
+           whatsapp_outbound_messages.delivered_at = IF(
+             ? >= 3,
+             COALESCE(whatsapp_outbound_messages.delivered_at, NOW()),
+             whatsapp_outbound_messages.delivered_at
+           ),
+           whatsapp_outbound_messages.read_at = IF(
+             ? >= 4,
+             COALESCE(whatsapp_outbound_messages.read_at, NOW()),
+             whatsapp_outbound_messages.read_at
+           ),
+           whatsapp_outbound_messages.updated_at = NOW()
+       WHERE devices.body = ?
+         AND whatsapp_outbound_messages.whatsapp_message_id = ?`,
+      [
+        delivery.rank,
+        delivery.name,
+        delivery.rank,
+        delivery.rank,
+        delivery.rank,
+        delivery.rank,
+        String(token),
+        messageId,
+      ]
+    );
+
+    if (result?.affectedRows) {
+      await dbQuery(
+        `UPDATE message_histories
+         INNER JOIN devices ON devices.id = message_histories.device_id
+         INNER JOIN whatsapp_outbound_messages
+            ON whatsapp_outbound_messages.device_id = message_histories.device_id
+           AND whatsapp_outbound_messages.whatsapp_message_id = message_histories.whatsapp_message_id
+         SET message_histories.delivery_status = whatsapp_outbound_messages.delivery_status,
+             message_histories.delivered_at = whatsapp_outbound_messages.delivered_at,
+             message_histories.read_at = whatsapp_outbound_messages.read_at,
+             message_histories.updated_at = NOW()
+         WHERE devices.body = ?
+           AND message_histories.whatsapp_message_id = ?`,
+        [String(token), messageId]
+      );
+
+      console.log("[delivery] update", {
+        token,
+        messageId,
+        jid: key?.remoteJid || null,
+        status: delivery.name,
+      });
+    }
+  } catch (error) {
+    console.log(`[delivery] failed updating ${messageId}:`, error.message || error);
   }
 }
 
@@ -422,12 +698,15 @@ async function createSocket(token, io, usePairingCode) {
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
     msgRetryCounterCache,
+    getMessage: (key) => getCachedOutboundMessage(token, key),
     generateHighQualityLinkPreview: false,
     markOnlineOnConnect: false,
     syncFullHistory: false,
     fireInitQueries: false,
     shouldIgnoreJid: (jid) => isNewsletterJid(jid),
   });
+
+  enableOutboundMessageRetryCache(token, socket);
 
   sessions[token] = socket;
   clearReconnectTimer(token);
@@ -556,13 +835,50 @@ async function createSocket(token, io, usePairingCode) {
       console.log(`Failed saving credentials for ${token}:`, error);
     }
   });
+  socket.ev.on("messaging-history.set", ({ contacts }) => {
+    Promise.all(
+      (contacts || []).map((contact) => captureContactRecipientMapping(token, contact, "history"))
+    ).catch((error) => {
+      console.log(`[recipient-map] history capture failed for ${token}:`, error.message || error);
+    });
+  });
+
+  socket.ev.on("contacts.upsert", (contacts) => {
+    Promise.all(
+      (contacts || []).map((contact) => captureContactRecipientMapping(token, contact, "contact-upsert"))
+    ).catch((error) => {
+      console.log(`[recipient-map] contact capture failed for ${token}:`, error.message || error);
+    });
+  });
+
+  socket.ev.on("contacts.update", (contacts) => {
+    Promise.all(
+      (contacts || []).map((contact) => captureContactRecipientMapping(token, contact, "contact-update"))
+    ).catch((error) => {
+      console.log(`[recipient-map] contact update failed for ${token}:`, error.message || error);
+    });
+  });
+
+  socket.ev.on("chats.phoneNumberShare", ({ jid, lid }) => {
+    saveRecipientMapping(token, jid, lid, "phone-number-share").catch((error) => {
+      console.log(`[recipient-map] phone number share failed for ${token}:`, error.message || error);
+    });
+  });
+
+  socket.ev.on("messages.update", (updates) => {
+    Promise.all(
+      (updates || []).map(({ key, update }) => updateOutboundDelivery(token, key, update?.status))
+    ).catch((error) => {
+      console.log(`[delivery] message update handler failed for ${token}:`, error.message || error);
+    });
+  });
+
   socket.ev.on("messages.upsert", (upsert) => {
-    for (const message of upsert?.messages || []) {
-      const remoteJid = jidNormalizedUser(message?.key?.remoteJid || "");
-      if (remoteJid.endsWith("@s.whatsapp.net")) {
-        rememberRecipientJids(token, remoteJid, remoteJid);
-      }
-    }
+    Promise.all(
+      (upsert?.messages || []).map((message) => captureMessageRecipientMapping(token, message))
+    ).catch((error) => {
+      console.log(`[recipient-map] message capture failed for ${token}:`, error.message || error);
+    });
 
     IncomingMessage(upsert, socket).catch((error) => {
       console.log(`Unhandled IncomingMessage error for ${token}:`, error);
@@ -745,10 +1061,11 @@ async function lookupWhatsAppJids(socket, number) {
 
   try {
     const results = await socket.onWhatsApp(normalizedNumber);
-    return (results || [])
-      .map((entry) => jidNormalizedUser(entry?.jid || ""))
-      .filter(Boolean);
+    return orderRecipientJids(
+      (results || []).flatMap((entry) => [entry?.lid, entry?.jid])
+    );
   } catch (error) {
+    console.log(`[recipient-map] onWhatsApp lookup failed for ${normalizedNumber}:`, error.message || error);
     return [];
   }
 }
@@ -759,7 +1076,7 @@ async function buildRecipientCandidates(token, socket, number) {
     return [];
   }
 
-  if (rawNumber.includes("@g.us") || rawNumber.includes("@s.whatsapp.net") || rawNumber.includes("@lid")) {
+  if (rawNumber.includes("@g.us") || rawNumber.includes("@lid")) {
     return [jidNormalizedUser(rawNumber)];
   }
 
@@ -768,7 +1085,7 @@ async function buildRecipientCandidates(token, socket, number) {
     return [];
   }
 
-  const candidates = [];
+  let candidates = [];
   const pushCandidate = (candidate) => {
     const normalizedCandidate = jidNormalizedUser(String(candidate || "").trim());
     if (normalizedCandidate && !candidates.includes(normalizedCandidate)) {
@@ -779,16 +1096,23 @@ async function buildRecipientCandidates(token, socket, number) {
   const cachedCandidates = getCachedRecipientJids(token, normalizedNumber);
   cachedCandidates.forEach(pushCandidate);
 
-  const storedCandidates = candidates.length > 0 ? [] : await loadStoredRecipientJids(token, normalizedNumber);
+  const storedCandidates = candidates.some(isLidJid) ? [] : await loadStoredRecipientJids(token, normalizedNumber);
   storedCandidates.forEach(pushCandidate);
 
-  const lookupCandidates = candidates.length > 0 ? [] : await lookupWhatsAppJids(socket, normalizedNumber);
+  const lookupCandidates = candidates.some(isLidJid) ? [] : await lookupWhatsAppJids(socket, normalizedNumber);
   if (lookupCandidates.length > 0) {
     rememberRecipientJids(token, normalizedNumber, lookupCandidates);
+
+    const lookupPnJid = lookupCandidates.find(isPhoneNumberJid);
+    const lookupLidJid = lookupCandidates.find(isLidJid);
+    if (lookupPnJid && lookupLidJid) {
+      await saveRecipientMapping(token, lookupPnJid, lookupLidJid, "usync");
+    }
   }
   lookupCandidates.forEach(pushCandidate);
   pushCandidate(formatReceipt(normalizedNumber));
 
+  candidates = orderRecipientJids(candidates);
   return candidates;
 }
 
@@ -799,9 +1123,23 @@ async function sendToResolvedRecipient(token, socket, number, payload, options) 
       const response = await socket.sendMessage(jid, payload, options);
       if (response) {
         rememberRecipientJids(token, number, jid);
+        await recordOutboundMessage(token, number, jid, response);
+        console.log("[outbound-route] accepted", {
+          token,
+          number: normalizeLookupNumber(number),
+          jid,
+          messageId: response?.key?.id || null,
+          candidateCount: candidates.length,
+        });
         return response;
       }
     } catch (error) {
+      console.log("[outbound-route] candidate failed", {
+        token,
+        number: normalizeLookupNumber(number),
+        jid,
+        error: error.message || String(error),
+      });
       continue;
     }
   }

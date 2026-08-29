@@ -2,7 +2,6 @@
 
 
 namespace App\Http\Controllers;
-use App\Services\OperationalHealthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -12,62 +11,86 @@ class HomeController extends Controller
 {
     
 
-    public function index(Request $request, OperationalHealthService $healthService){
-        try {
-            $numbers = $request->user()->devices()->latest()->paginate(15);
+    public function index(Request $request){
+        $selectedDevice = null;
 
-            $user = $request->user()->withCount(['devices','campaigns'])->
-            withCount(['blasts as blasts_pending' => function($q){
-                return $q->where('status', 'pending');
-            }])->withCount(['blasts as blasts_success' => function($q){
-                return $q->where('status', 'success');
-            }])->withCount(['blasts as blasts_failed' => function($q){
-                return $q->where('status', 'failed');
-            }])->withCount('messageHistories')->find($request->user()->id);
+        try {
+            $today = now()->toDateString();
+            $numbers = $request->user()->devices()->latest()->paginate(10);
+            $user = $request->user()->loadCount([
+                'devices',
+                'devices as connected_devices_count' => function ($query) {
+                    $query->where('status', 'Connected');
+                },
+                'campaigns',
+                'blasts as blasts_pending' => function ($query) {
+                    $query->where('status', 'pending');
+                },
+                'blasts as blasts_success' => function ($query) {
+                    $query->where('status', 'success');
+                },
+                'blasts as blasts_failed' => function ($query) {
+                    $query->where('status', 'failed');
+                },
+                'messageHistories',
+                'messageHistories as messages_today_count' => function ($query) use ($today) {
+                    $query->whereDate('created_at', $today);
+                },
+                'messageHistories as messages_success_today_count' => function ($query) use ($today) {
+                    $query->whereDate('created_at', $today)->where('status', 'success');
+                },
+                'messageHistories as messages_failed_today_count' => function ($query) use ($today) {
+                    $query->whereDate('created_at', $today)->where('status', 'failed');
+                },
+                'aiConversations',
+                'aiConversations as paused_ai_conversations_count' => function ($query) {
+                    $query->where('status', 'paused');
+                },
+            ]);
 
             $user['expired_subscription_status'] = $user->expiredSubscription;
             $user['subscription_status'] = $user->isExpiredSubscription ? 'Expired' : $user->active_subscription;
-            $selectedDevice = null;
             if (session()->has('selectedDevice')) {
                 $selectedDevice = $request->user()->devices()->find(session()->get('selectedDevice')['device_id']);
             }
 
-            $operational = $healthService->buildDashboardSummary($request->user(), $selectedDevice);
+            $dashboard = [
+                'delivery_rate' => $user->messages_today_count > 0
+                    ? (int) round(($user->messages_success_today_count / $user->messages_today_count) * 100)
+                    : 0,
+                'active_ai_conversations' => max(0, $user->ai_conversations_count - $user->paused_ai_conversations_count),
+                'load_warning' => null,
+            ];
         } catch (\Throwable $th) {
-            Log::error('Home dashboard failed, using fallback payload.', [
+            Log::error('Home dashboard failed, using lightweight fallback payload.', [
                 'message' => $th->getMessage(),
             ]);
 
-            $numbers = $request->user()->devices()->latest()->paginate(15);
-            $user = $request->user()->loadCount(['devices', 'campaigns', 'messageHistories', 'blasts as blasts_pending' => function ($q) {
-                return $q->where('status', 'pending');
-            }, 'blasts as blasts_success' => function ($q) {
-                return $q->where('status', 'success');
-            }, 'blasts as blasts_failed' => function ($q) {
-                return $q->where('status', 'failed');
-            }]);
+            $numbers = $request->user()->devices()->latest()->paginate(10);
+            $user = $request->user()->loadCount(['devices', 'campaigns', 'messageHistories']);
+            foreach ([
+                'connected_devices_count',
+                'blasts_pending',
+                'blasts_success',
+                'blasts_failed',
+                'messages_today_count',
+                'messages_success_today_count',
+                'messages_failed_today_count',
+                'ai_conversations_count',
+                'paused_ai_conversations_count',
+            ] as $attribute) {
+                $user->setAttribute($attribute, 0);
+            }
             $user['expired_subscription_status'] = $user->expiredSubscription;
             $user['subscription_status'] = $user->isExpiredSubscription ? 'Expired' : $user->active_subscription;
-            $operational = [
-                'health' => [],
-                'metrics' => [
-                    'incoming_active_chats_today' => 0,
-                    'incoming_messages_tracked_today' => 0,
-                    'auto_reply_success_today' => 0,
-                    'auto_reply_failed_today' => 0,
-                    'ai_fallback_today' => 0,
-                    'paused_conversations' => 0,
-                ],
-                'alerts' => [[
-                    'level' => 'warning',
-                    'title' => 'Dashboard sedang dalam mode aman',
-                    'message' => 'Ada komponen operasional yang gagal dimuat, tetapi login tetap aman. Silakan cek log server.',
-                ]],
-                'setup' => [],
+            $dashboard = [
+                'delivery_rate' => 0,
+                'active_ai_conversations' => 0,
+                'load_warning' => 'Sebagian ringkasan belum dapat dimuat. Fitur utama tetap dapat digunakan.',
             ];
         }
 
-        return view('home',compact('numbers','user', 'operational'));
+        return view('home', compact('numbers', 'user', 'dashboard', 'selectedDevice'));
     }
 
     public function store(Request $request){

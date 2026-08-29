@@ -1,152 +1,137 @@
-<!--start sidebar -->
 <aside class="sidebar-wrapper" data-simplebar="true">
     <div class="sidebar-header">
-        <div class="sidebar-brand">
-            <div class="brand-mark"><i class="bi bi-lightning-charge-fill"></i></div>
-            <div class="brand-copy">
-                <h4 class="brand-title">ChatSmart <small>v1.0.0</small></h4>
-                <p class="brand-subtitle">WhatsApp Gateway</p>
-            </div>
-        </div>
-        <div class="toggle-icon ms-auto"><i class="bi bi-list"></i></div>
+        <a href="{{ route('home') }}" class="sidebar-brand">
+            <span class="brand-mark"><i class="bi bi-lightning-charge-fill"></i></span>
+            <span class="brand-copy">
+                <span class="brand-title">ChatSmart</span>
+                <span class="brand-subtitle">WhatsApp Workspace</span>
+            </span>
+        </a>
+        <button type="button" class="toggle-icon ms-auto border-0" aria-label="Kecilkan navigasi">
+            <i class="bi bi-layout-sidebar-inset"></i>
+        </button>
     </div>
 
     <div class="sidebar-menu-area">
         <ul class="metismenu" id="menu">
-            <li class="menu-label">Main Menu</li>
-            <li class="{{ request()->is('home') ? 'active' : '' }}">
+            <li class="menu-label">Workspace</li>
+            <li class="{{ request()->routeIs('home') ? 'active' : '' }}">
                 <a href="{{ route('home') }}">
-                    <div class="parent-icon"><i class="bi bi-house-door"></i></div>
-                    <div class="menu-title">{{ __('system.dashboard') }}</div>
+                    <span class="parent-icon"><i class="bi bi-grid"></i></span>
+                    <span class="menu-title">Dashboard</span>
                 </a>
-            </li>
-            <li class="{{ request()->is('file-manager') ? 'active' : '' }}">
-                <a href="{{ route('file-manager') }}">
-                    <div class="parent-icon"><i class="bi bi-folder2-open"></i></div>
-                    <div class="menu-title">{{ __('system.file_manager') }}</div>
-                </a>
-            </li>
-            <li class="{{ request()->is('phonebook') ? 'active' : '' }}">
-                <a href="{{ route('phonebook') }}">
-                    <div class="parent-icon"><i class="bi bi-people"></i></div>
-                    <div class="menu-title">{{ __('system.phone_book') }}</div>
-                </a>
-            </li>
-            <li>
-                <a href="javascript:;" class="has-arrow">
-                    <div class="parent-icon"><i class="bi bi-graph-up-arrow"></i></div>
-                    <div class="menu-title">{{ __('system.reports') }}</div>
-                </a>
-                <ul>
-                    <li class="{{ request()->is('campaigns') ? 'active' : '' }}">
-                        <a href="{{ route('campaigns') }}"><i class="bi bi-circle"></i>{{ __('system.campaign_blast') }}</a>
-                    </li>
-                    <li class="{{ request()->is('messages.history') ? 'active' : '' }}">
-                        <a href="{{ route('messages.history') }}"><i class="bi bi-circle"></i>{{ __('system.messages_history') }}</a>
-                    </li>
-                </ul>
             </li>
 
             <x-select-device></x-select-device>
 
             @if (Session::has('selectedDevice'))
-                <li class="{{ request()->is('autoreply*') ? 'active' : '' }}">
-                    <a href="{{ route('autoreply') }}">
-                        <div class="parent-icon"><i class="bi bi-chat-left-dots"></i></div>
-                        <div class="menu-title">{{ __('system.autoreply') }}</div>
-                    </a>
-                </li>
-                <li>
-                    <a href="javascript:;" class="has-arrow">
-                        <div class="parent-icon"><i class="bi bi-stars"></i></div>
-                        <div class="menu-title">AI Bot</div>
-                    </a>
-                    <ul>
-                        <li class="{{ request()->is('ai-bots*') ? 'active' : '' }}">
-                            <a href="{{ route('ai-bots.index') }}"><i class="bi bi-circle"></i>Bot Profiles</a>
-                        </li>
-                        <li class="{{ request()->is('ai-conversations*') ? 'active' : '' }}">
-                            <a href="{{ route('ai-conversations.index') }}"><i class="bi bi-circle"></i>AI Conversations</a>
-                        </li>
-                    </ul>
-                </li>
-                <li class="{{ url()->current() == route('campaign.create') ? 'mm-active' : '' }}">
-                    <a href="{{ route('campaign.create') }}">
-                        <div class="parent-icon"><i class="bi bi-plus-circle"></i></div>
-                        <div class="menu-title">{{ __('system.create_campaign') }}</div>
-                    </a>
-                </li>
-                <li class="{{ url()->current() == route('messagetest') ? 'mm-active' : '' }}">
+                <li class="{{ request()->routeIs('messagetest') ? 'active' : '' }}">
                     <a href="{{ route('messagetest') }}">
-                        <div class="parent-icon"><i class="bi bi-send"></i></div>
-                        <div class="menu-title">{{ __('system.test_message') }}</div>
+                        <span class="parent-icon"><i class="bi bi-send"></i></span>
+                        <span class="menu-title">Kirim Pesan</span>
+                    </a>
+                </li>
+                <li class="{{ request()->routeIs('autoreply*') ? 'active' : '' }}">
+                    <a href="{{ route('autoreply') }}">
+                        <span class="parent-icon"><i class="bi bi-reply"></i></span>
+                        <span class="menu-title">Auto Reply</span>
+                    </a>
+                </li>
+                <li class="{{ request()->routeIs('campaign.create') ? 'active' : '' }}">
+                    <a href="{{ route('campaign.create') }}">
+                        <span class="parent-icon"><i class="bi bi-megaphone"></i></span>
+                        <span class="menu-title">Buat Campaign</span>
                     </a>
                 </li>
             @endif
 
-            <li class="menu-label">Developer</li>
-            <li class="{{ url()->current() == route('rest-api') ? 'mm-active' : '' }}">
-                <a href="{{ route('rest-api') }}">
-                    <div class="parent-icon"><i class="bi bi-code-square"></i></div>
-                    <div class="menu-title">{{ __('system.api_docs') }}</div>
+            <li class="{{ request()->routeIs('ai-bots*', 'ai-conversations*') ? 'mm-active' : '' }}">
+                <a href="javascript:;" class="has-arrow">
+                    <span class="parent-icon"><i class="bi bi-stars"></i></span>
+                    <span class="menu-title">AI Assistant</span>
+                </a>
+                <ul>
+                    <li class="{{ request()->routeIs('ai-bots*') ? 'active' : '' }}">
+                        <a href="{{ route('ai-bots.index') }}"><i class="bi bi-circle"></i>Profil Bot</a>
+                    </li>
+                    <li class="{{ request()->routeIs('ai-conversations*') ? 'active' : '' }}">
+                        <a href="{{ route('ai-conversations.index') }}"><i class="bi bi-circle"></i>Histori Percakapan</a>
+                    </li>
+                </ul>
+            </li>
+
+            <li class="menu-label">Kelola</li>
+            <li class="{{ request()->routeIs('phonebook') ? 'active' : '' }}">
+                <a href="{{ route('phonebook') }}">
+                    <span class="parent-icon"><i class="bi bi-people"></i></span>
+                    <span class="menu-title">Kontak</span>
                 </a>
             </li>
-            <li class="{{ request()->is('user/settings') ? 'active' : '' }}">
-                <a href="{{ route('user.settings') }}">
-                    <div class="parent-icon"><i class="bi bi-key"></i></div>
-                    <div class="menu-title">API Key & Account</div>
+            <li class="{{ request()->routeIs('campaigns') ? 'active' : '' }}">
+                <a href="{{ route('campaigns') }}">
+                    <span class="parent-icon"><i class="bi bi-broadcast"></i></span>
+                    <span class="menu-title">Campaign</span>
+                </a>
+            </li>
+            <li class="{{ request()->routeIs('messages.history*') ? 'active' : '' }}">
+                <a href="{{ route('messages.history') }}">
+                    <span class="parent-icon"><i class="bi bi-clock-history"></i></span>
+                    <span class="menu-title">Riwayat Pesan</span>
+                </a>
+            </li>
+            <li class="{{ request()->routeIs('file-manager') ? 'active' : '' }}">
+                <a href="{{ route('file-manager') }}">
+                    <span class="parent-icon"><i class="bi bi-folder2"></i></span>
+                    <span class="menu-title">File Manager</span>
                 </a>
             </li>
 
-            @if (Auth::user()->level == 'admin')
-                <li class="menu-label">Settings</li>
-                <li>
+            <li class="menu-label">Integrasi</li>
+            <li class="{{ request()->routeIs('rest-api') ? 'active' : '' }}">
+                <a href="{{ route('rest-api') }}">
+                    <span class="parent-icon"><i class="bi bi-code-square"></i></span>
+                    <span class="menu-title">Dokumentasi API</span>
+                </a>
+            </li>
+            <li class="{{ request()->routeIs('user.settings') ? 'active' : '' }}">
+                <a href="{{ route('user.settings') }}">
+                    <span class="parent-icon"><i class="bi bi-key"></i></span>
+                    <span class="menu-title">API Key & Akun</span>
+                </a>
+            </li>
+
+            @if (Auth::user()->level === 'admin')
+                <li class="menu-label">Administrasi</li>
+                <li class="{{ request()->routeIs('admin.*') ? 'mm-active' : '' }}">
                     <a href="javascript:;" class="has-arrow">
-                        <div class="parent-icon"><i class="bi bi-gear"></i></div>
-                        <div class="menu-title">{{ __('system.admin') }}</div>
+                        <span class="parent-icon"><i class="bi bi-gear"></i></span>
+                        <span class="menu-title">Pengaturan</span>
                     </a>
                     <ul>
-                        <li class="{{ request()->is('admin.settings') ? 'active' : '' }}">
-                            <a href="{{ route('admin.settings') }}"><i class="bi bi-circle"></i>{{ __('system.server_settings') }}</a>
+                        <li class="{{ request()->routeIs('admin.settings') ? 'active' : '' }}">
+                            <a href="{{ route('admin.settings') }}"><i class="bi bi-circle"></i>Server</a>
                         </li>
-                        <li class="{{ request()->is('admin/update') ? 'active' : '' }}">
-                            <a href="{{ route('admin.update') }}"><i class="bi bi-circle"></i>{{ __('system.update') }}</a>
+                        <li class="{{ request()->routeIs('admin.manage-users') ? 'active' : '' }}">
+                            <a href="{{ route('admin.manage-users') }}"><i class="bi bi-circle"></i>Pengguna</a>
                         </li>
-                        <li class="{{ request()->is('admin/operational-audit*') ? 'active' : '' }}">
-                            <a href="{{ route('admin.operational-audit') }}"><i class="bi bi-circle"></i>Operational Audit</a>
+                        <li class="{{ request()->routeIs('admin.operational-audit') ? 'active' : '' }}">
+                            <a href="{{ route('admin.operational-audit') }}"><i class="bi bi-circle"></i>Audit Operasional</a>
                         </li>
-                        <li class="{{ request()->is('admin/database-tools*') ? 'active' : '' }}">
-                            <a href="{{ route('admin.database-tools') }}"><i class="bi bi-circle"></i>{{ __('system.database_tools') }}</a>
+                        <li class="{{ request()->routeIs('admin.database-tools') ? 'active' : '' }}">
+                            <a href="{{ route('admin.database-tools') }}"><i class="bi bi-circle"></i>Database</a>
                         </li>
-                        <li class="{{ request()->is('admin.manage-users') ? 'active' : '' }}">
-                            <a href="{{ route('admin.manage-users') }}"><i class="bi bi-circle"></i>{{ __('system.manage_user') }}</a>
+                        <li class="{{ request()->routeIs('admin.update') ? 'active' : '' }}">
+                            <a href="{{ route('admin.update') }}"><i class="bi bi-circle"></i>Update</a>
                         </li>
                     </ul>
                 </li>
             @endif
         </ul>
 
-        <div class="sidebar-promo">
-            <div class="promo-orb"></div>
-            @if (Auth::user()->level === 'admin')
-                <h6>Tingkatkan Performa</h6>
-                <p>Dapatkan pengalaman ChatSmart yang lebih stabil, modern, dan siap dipakai untuk operasional harian.</p>
-                <a href="{{ route('admin.update') }}" class="btn btn-primary btn-sm">Kelola Update</a>
-            @else
-                <h6>Kelola Akun</h6>
-                <p>User biasa hanya bisa mengelola API key dan keamanan akun. Pengaturan server dan user lain khusus admin.</p>
-                <a href="{{ route('user.settings') }}" class="btn btn-primary btn-sm">Buka Pengaturan Akun</a>
-            @endif
-        </div>
-
-        <div class="sidebar-user-panel">
+        <a href="{{ route('user.settings') }}" class="cs-sidebar-account">
             <img src="{{ asset('assets/images/avatars/avatar-1.png') }}" alt="{{ Auth::user()->username }}">
-            <div class="meta">
-                <strong>{{ Auth::user()->username }}</strong>
-                <span>{{ Auth::user()->level }} | ChatSmart</span>
-            </div>
-            <i class="bi bi-chevron-down"></i>
-        </div>
+            <span><strong>{{ Auth::user()->username }}</strong><small>{{ ucfirst(Auth::user()->level) }}</small></span>
+            <i class="bi bi-chevron-right"></i>
+        </a>
     </div>
 </aside>
-<!--end sidebar -->
